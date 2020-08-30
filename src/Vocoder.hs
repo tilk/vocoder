@@ -48,9 +48,9 @@ smart_add_zeropadding len v
     większe_pół = diff - (floor $ fromIntegral diff / 2)
     res = (V.++) ((V.++) (V.replicate większe_pół 0) v) (V.replicate (diff-większe_pół) 0)
 
-smart_fft_with_plan :: FT_plan -> Window -> Length -> [Frame] -> [FFT_output]
-smart_fft_with_plan my_plan win len aus =
-    map (FFT.execute my_plan . rewind . smart_add_zeropadding len . applyWindow win) aus
+smart_fft_with_plan :: Vocoder_params -> Frame -> FFT_output
+smart_fft_with_plan par =
+    FFT.execute (fft_plan par) . rewind . smart_add_zeropadding (frame_length par) . applyWindow (fft_window par)
 
 analysis_stage :: Vocoder_params -> Phase -> [(HopSize, Frame)] -> (Phase,[(HopSize, SFT_block)])
 analysis_stage par ph li_in =
@@ -58,7 +58,7 @@ analysis_stage par ph li_in =
     where
     (h_li,au_li) = unzip li_in
     fft_res :: [(HopSize,FFT_output)]
-    fft_res = zip h_li $ smart_fft_with_plan (fft_plan par) (fft_window par) (frame_length par) au_li
+    fft_res = zip h_li $ map (smart_fft_with_plan par) au_li
 
 analysis_step :: Length -> Phase -> (HopSize,FFT_output) -> (Phase,(HopSize,SFT_block))
 analysis_step eN prev_ph (h,vec) =
@@ -78,12 +78,12 @@ calc_phase_inc eN hop k ph_diff =
     omega = (2*pi*fromIntegral k*fromIntegral hop) / fromIntegral eN
 
 synthesis_stage :: Vocoder_params -> Phase -> [(HopSize,SFT_block)] -> (Phase,[(HopSize,Frame)])
-synthesis_stage param ph hop_and_block_list =
+synthesis_stage par ph hop_and_block_list =
     (id ***back_to_time_domain)
     $ mapAccumL (synthesis_step) ph hop_and_block_list
     where
     back_to_time_domain :: [(HopSize,FFT_output)] -> [(HopSize,V.Vector Double)]
-    back_to_time_domain = uncurry zip . (id***smart_ifft_with_plan (ifft_plan param) (fft_window param) (frame_length param)) . unzip
+    back_to_time_domain = uncurry zip . (id *** map (smart_ifft_with_plan par)) . unzip
 
 synthesis_step :: Phase -> (HopSize,SFT_block) -> (Phase,(HopSize,FFT_output))
 synthesis_step ph (hop,(mag,ph_inc)) =
@@ -91,9 +91,9 @@ synthesis_step ph (hop,(mag,ph_inc)) =
     where
     new_ph = V.zipWith (+) ph $ V.map (* fromIntegral hop) ph_inc
 
-smart_ifft_with_plan :: IFT_plan -> Window -> Length -> [FFT_output] -> [V.Vector Double]
-smart_ifft_with_plan my_plan win len input =
-    map (applyWindow win . cut_center len . rewind . FFT.execute my_plan) input
+smart_ifft_with_plan :: Vocoder_params -> FFT_output -> Frame
+smart_ifft_with_plan par =
+    applyWindow (fft_window par) . cut_center (frame_length par) . rewind . FFT.execute (ifft_plan par)
 
 cut_center :: (V.Storable a) => Length -> V.Vector a -> V.Vector a
 cut_center len vec = V.take len $ V.drop (floor $ (fromIntegral $ V.length vec - len)/2) vec
