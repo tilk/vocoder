@@ -25,6 +25,7 @@ data Vocoder_params = Vocoder_params{
     fft_plan  :: FT_plan,
     ifft_plan :: IFT_plan,
     frame_length :: Length,
+    hop_size :: HopSize,
     fft_window :: Window
     -- TODO thread safety?
 }
@@ -52,17 +53,12 @@ smart_fft_with_plan :: Vocoder_params -> Frame -> FFT_output
 smart_fft_with_plan par =
     FFT.execute (fft_plan par) . rewind . smart_add_zeropadding (frame_length par) . applyWindow (fft_window par)
 
-analysis_stage :: Vocoder_params -> Phase -> [(HopSize, Frame)] -> (Phase,[(HopSize, SFT_block)])
-analysis_stage par ph li_in =
-    mapAccumL (analysis_step (frame_length par)) ph fft_res
-    where
-    (h_li,au_li) = unzip li_in
-    fft_res :: [(HopSize,FFT_output)]
-    fft_res = zip h_li $ map (smart_fft_with_plan par) au_li
+analysis_stage :: Vocoder_params -> Phase -> [Frame] -> (Phase, [SFT_block])
+analysis_stage par ph = mapAccumL (analysis_step (hop_size par) (frame_length par)) ph .  map (smart_fft_with_plan par)
 
-analysis_step :: Length -> Phase -> (HopSize,FFT_output) -> (Phase,(HopSize,SFT_block))
-analysis_step eN prev_ph (h,vec) =
-    (ph,(h,(mag,ph_inc)))
+analysis_step :: HopSize -> Length -> Phase -> FFT_output -> (Phase,SFT_block)
+analysis_step h eN prev_ph vec =
+    (ph,(mag,ph_inc))
     where
     ph = V.map phase vec
     mag = V.map magnitude vec
@@ -77,17 +73,17 @@ calc_phase_inc eN hop k ph_diff =
     where
     omega = (2*pi*fromIntegral k*fromIntegral hop) / fromIntegral eN
 
-synthesis_stage :: Vocoder_params -> Phase -> [(HopSize,SFT_block)] -> (Phase,[(HopSize,Frame)])
+synthesis_stage :: Vocoder_params -> Phase -> [SFT_block] -> (Phase,[Frame])
 synthesis_stage par ph hop_and_block_list =
-    (id ***back_to_time_domain)
-    $ mapAccumL (synthesis_step) ph hop_and_block_list
+    (id *** back_to_time_domain)
+    $ mapAccumL (synthesis_step (hop_size par)) ph hop_and_block_list
     where
-    back_to_time_domain :: [(HopSize,FFT_output)] -> [(HopSize,V.Vector Double)]
-    back_to_time_domain = uncurry zip . (id *** map (smart_ifft_with_plan par)) . unzip
+    back_to_time_domain :: [FFT_output] -> [V.Vector Double]
+    back_to_time_domain = map (smart_ifft_with_plan par)
 
-synthesis_step :: Phase -> (HopSize,SFT_block) -> (Phase,(HopSize,FFT_output))
-synthesis_step ph (hop,(mag,ph_inc)) =
-    (new_ph,(hop,V.zipWith mkPolar mag new_ph))
+synthesis_step :: HopSize -> Phase -> SFT_block -> (Phase, FFT_output)
+synthesis_step hop ph (mag, ph_inc) =
+    (new_ph, V.zipWith mkPolar mag new_ph)
     where
     new_ph = V.zipWith (+) ph $ V.map (* fromIntegral hop) ph_inc
 
