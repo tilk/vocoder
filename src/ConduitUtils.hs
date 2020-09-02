@@ -5,6 +5,7 @@ import Control.Arrow
 import Control.Monad
 import Data.Conduit
 import Data.Foldable
+import Data.MonoTraversable
 import qualified Data.Conduit.Internal as DCI
 import qualified Data.Sequence as DS
 import qualified Data.Sequences as Seq
@@ -35,5 +36,28 @@ framesOfE chunkSize hopSize = process 0 DS.empty
                     let (r, q'') = DS.spanl ((>= chunkSize) . fst) q'
                     forM (map (Seq.take chunkSize . mconcat . reverse . snd) $ toList r) yield
                     process ((sofar - len) `mod` hopSize) q''
+
+sumFramesWithE :: (Monad m, Seq.IsSequence seq) => Element seq -> (seq -> seq -> seq) -> Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
+sumFramesWithE zero add chunkSize hopSize = process 0 DS.empty
+    where
+        prep (n, c0) = fLeft $ fRight c0
+            where
+                fLeft c  | n <= 0    = Seq.drop (-n) c
+                         | otherwise = Seq.replicate n zero <> c
+                fRight c | r <= 0    = Seq.dropEnd (-r) c
+                         | otherwise = c <> Seq.replicate r zero
+                r = chunkSize - n - Seq.lengthIndex c0
+        publish q = unless (DS.null q) $ yield $ foldr1 add $ fmap prep q
+        process sofar q 
+            | sofar >= chunkSize = do
+                publish q
+                let q' = fmap ((+ (-chunkSize)) *** id) $ DS.dropWhileL (\(n, c) -> Seq.lengthIndex c + n <= chunkSize) q
+                process (sofar - chunkSize) q'
+            | otherwise = do
+                next <- await
+                case next of
+                    Nothing -> publish q
+                    Just next' -> 
+                        process (sofar + hopSize) (q DS.|> (sofar, next'))
 
 
