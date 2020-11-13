@@ -28,3 +28,19 @@ library
                        conduit-audio >= 0.2.0.3 && < 0.3
   hs-source-dirs:      src
   default-language:    Haskell2010
+
+executable example
+  main-is:         Main.hs
+  hs-source-dirs:  example
+  -- other-modules:
+  build-depends:       base >=4.11 && <4.12,
+                       vector >= 0.12.1.0 && <0.13,
+                       conduit >= 1.3.2 && < 1.4,
+                       hsndfile >= 0.8.0 && < 0.9,
+                       conduit-audio >= 0.2.0.3 && < 0.3,
+                       conduit-audio-sndfile >= 0.1.2.2 && < 0.2,
+                       resourcet >= 1.2.2 && < 1.3,
+                       vocoder
+  default-language:    Haskell2010
+
+
