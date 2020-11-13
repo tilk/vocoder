@@ -24,11 +24,19 @@ type IFT_plan = FFTp.Plan (Complex Double) Double
 data Vocoder_params = Vocoder_params{
     fft_plan  :: FT_plan,
     ifft_plan :: IFT_plan,
-    frame_length :: Length,
     hop_size :: HopSize,
     fft_window :: Window
     -- TODO thread safety?
 }
+
+frame_length :: Vocoder_params -> Length
+frame_length par = planInputSize $ fft_plan par
+
+input_frame_length :: Vocoder_params -> Length
+input_frame_length par = V.length $ fft_window par
+
+make_vocoder_params :: Length -> HopSize -> Window -> Vocoder_params
+make_vocoder_params len hs wnd = Vocoder_params (plan dftR2C len) (plan dftC2R len) hs wnd
 
 applyWindow :: Window -> Frame -> Frame
 applyWindow = V.zipWith (*)
@@ -93,4 +101,7 @@ smart_ifft_with_plan par =
 
 cut_center :: (V.Storable a) => Length -> V.Vector a -> V.Vector a
 cut_center len vec = V.take len $ V.drop (floor $ (fromIntegral $ V.length vec - len)/2) vec
+
+zero_phase :: Vocoder_params -> Phase
+zero_phase par = V.replicate (planOutputSize $ fft_plan par) 0
 
