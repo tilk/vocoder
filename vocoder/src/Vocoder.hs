@@ -105,3 +105,6 @@ cut_center len vec = V.take len $ V.drop (floor $ (fromIntegral $ V.length vec -
 zero_phase :: Vocoder_params -> Phase
 zero_phase par = V.replicate (planOutputSize $ fft_plan par) 0
 
+volume_coeff :: Vocoder_params -> Double
+volume_coeff par = fromIntegral (hop_size par) / V.sum (V.map (**2) $ fft_window par)
+

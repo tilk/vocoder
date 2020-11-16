@@ -3,7 +3,9 @@ module Main where
 
 import System.Environment
 import Vocoder
+import Vocoder.Window
 import Vocoder.Audio
+import Vocoder.Conduit.Filter
 import Sound.File.Sndfile
 import qualified Data.Conduit.Combinators as DCC
 import Data.Conduit.Audio
@@ -18,10 +20,9 @@ myFormat = Format {headerFormat = HeaderFormatWav, sampleFormat = SampleFormatPc
 main = do
     [srcfile, dstfile] <- getArgs
     src :: AudioSource _ Double <- sourceSnd srcfile
-    let window = V.replicate 512 1
+    let window = blackmanWindow 512
     let params = make_vocoder_params 512 32 window
-    let volume_coeff = fromIntegral (hop_size params) / V.sum window
-    let trans = DCC.map $ map $ V.map (* volume_coeff) *** id
+    let trans = lowpassBrickwall 500
     runResourceT $ sinkSnd dstfile myFormat $ processA params trans src
 
 

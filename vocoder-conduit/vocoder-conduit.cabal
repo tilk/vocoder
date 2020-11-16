@@ -16,7 +16,7 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules: Vocoder.Conduit, Vocoder.Conduit.Utils
+  exposed-modules: Vocoder.Conduit, Vocoder.Conduit.Utils, Vocoder.Conduit.Filter
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.11 && <4.12,
