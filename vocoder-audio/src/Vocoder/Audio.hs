@@ -1,12 +1,12 @@
-module VocoderAudio where
+module Vocoder.Audio where
 
 import Data.Conduit
 import Data.Conduit.Audio
 import qualified Data.Conduit.Combinators as DCC
 import Control.Applicative
 import Vocoder
-import VocoderConduit
-import ConduitUtils
+import Vocoder.Conduit
+import Vocoder.ConduitUtils
 import qualified Data.Vector.Storable as V
 
 processA :: Monad m

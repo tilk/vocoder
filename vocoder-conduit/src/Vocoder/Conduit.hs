@@ -1,4 +1,4 @@
-module VocoderConduit where
+module Vocoder.Conduit where
 
 import Data.Conduit
 import qualified Data.Conduit.List as DCL
