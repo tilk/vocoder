@@ -97,7 +97,7 @@ synthesis_step hop ph (mag, ph_inc) =
 
 smart_ifft_with_plan :: Vocoder_params -> FFT_output -> Frame
 smart_ifft_with_plan par =
-    applyWindow (fft_window par) . cut_center (frame_length par) . rewind . FFT.execute (ifft_plan par)
+    applyWindow (fft_window par) . cut_center (input_frame_length par) . rewind . FFT.execute (ifft_plan par)
 
 cut_center :: (V.Storable a) => Length -> V.Vector a -> V.Vector a
 cut_center len vec = V.take len $ V.drop (floor $ (fromIntegral $ V.length vec - len)/2) vec
