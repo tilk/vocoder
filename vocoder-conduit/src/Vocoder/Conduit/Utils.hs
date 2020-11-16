@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
-module Vocoder.ConduitUtils where
+module Vocoder.Conduit.Utils where
 
 import Control.Arrow
 import Control.Monad

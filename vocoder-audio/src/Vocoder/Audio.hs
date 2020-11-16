@@ -6,7 +6,7 @@ import qualified Data.Conduit.Combinators as DCC
 import Control.Applicative
 import Vocoder
 import Vocoder.Conduit
-import Vocoder.ConduitUtils
+import Vocoder.Conduit.Utils
 import qualified Data.Vector.Storable as V
 
 processA :: Monad m
