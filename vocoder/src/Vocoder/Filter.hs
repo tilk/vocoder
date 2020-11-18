@@ -22,6 +22,6 @@ bandpassBrickwall :: Double -> Double -> Filter
 bandpassBrickwall t u = linearAmplitudeFilter $ \x -> if x >= t && x <= u then 1.0 else 0.0 
 
 bandstopBrickwall :: Double -> Double -> Filter
-bandstopBrickwall t u = linearAmplitudeFilter $ \x -> if x >= t && x <= u then 1.0 else 0.0 
+bandstopBrickwall t u = linearAmplitudeFilter $ \x -> if x <= t || x >= u then 1.0 else 0.0 
 
 
