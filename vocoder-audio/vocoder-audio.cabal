@@ -45,7 +45,8 @@ executable example
                        conduit-audio >= 0.2.0.3 && < 0.3,
                        conduit-audio-sndfile >= 0.1.2.2 && < 0.2,
                        resourcet >= 1.2.2 && < 1.3,
-                       optparse-applicative >= 0.16.0.0 && < 0.17
+                       optparse-applicative >= 0.16.0.0 && < 0.17,
+                       split >= 0.2.3.4 && < 0.3
   default-language:    Haskell2010
 
 
