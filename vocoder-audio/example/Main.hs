@@ -26,7 +26,7 @@ data Options = Options {
     destFile :: String,
     optFrameSize :: Maybe Length,
     windowSize :: Length,
-    hopSize :: HopSize,
+    hopSizeO :: HopSize,
     windowType :: WindowType,
     filterOpt :: Filter [] (ResourceT IO)
 }
@@ -105,6 +105,6 @@ main = execParser opts >>= process
 process :: Options -> IO ()
 process opts = do
     src :: AudioSource _ Double <- sourceSnd $ sourceFile opts
-    let params = make_vocoder_params (frameSize opts) (hopSize opts) (windowFor opts)
+    let params = vocoderParams (frameSize opts) (hopSizeO opts) (windowFor opts)
     runResourceT $ sinkSnd (destFile opts) myFormat $ processA params (filterOpt opts) src
 

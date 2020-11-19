@@ -1,4 +1,28 @@
-module Vocoder where
+module Vocoder (
+      Moduli,
+      Phase,
+      PhaseInc,
+      Frame,
+      Window,
+      HopSize,
+      Length,
+      STFTFrame,
+      FFTOutput,
+      VocoderParams,
+      vocoderParams,
+      frameLength,
+      inputFrameLength,
+      hopSize,
+      fftWindow,
+      doFFT,
+      doIFFT,
+      analysisStep,
+      analysisStage,
+      synthesisStep,
+      synthesisStage,
+      zeroPhase,
+      volumeCoeff
+    ) where
 
 import Data.List
 import Data.Complex
@@ -9,102 +33,152 @@ import Numeric.FFT.Vector.Invertible as FFT
 import Numeric.FFT.Vector.Plan as FFTp
 import qualified Data.Vector.Storable as V
 
+-- | Complex moduli of FFT frames. Represent signal amplitudes.
 type Moduli = V.Vector Double
-type Phase = V.Vector Double
-type Phase_inc = V.Vector Double
-type Frame = V.Vector Double
-type Window = Frame
-type HopSize = Int
-type Length = Int
-type SFT_block = (Moduli,Phase_inc)
-type FFT_output = V.Vector (Complex Double)
-type FT_plan = FFTp.Plan Double (Complex Double)
-type IFT_plan = FFTp.Plan (Complex Double) Double
 
-data Vocoder_params = Vocoder_params{
-    fft_plan  :: FT_plan,
-    ifft_plan :: IFT_plan,
-    hop_size :: HopSize,
-    fft_window :: Window
+-- | Complex arguments of FFT frames. Represent signal phases.
+type Phase = V.Vector Double
+
+-- | Phase increments. Represent the deviation of the phase difference
+-- between successive frames from the expected difference for the center
+-- frequencies of the FFT bins.
+type PhaseInc = V.Vector Double
+
+-- | Time domain frame.
+type Frame = V.Vector Double
+
+-- | Sampled STFT window function.
+type Window = Frame
+
+-- | Offset between successive STFT frames, in samples.
+type HopSize = Int
+
+-- | Size in samples.
+type Length = Int
+
+-- | STFT processing unit.
+type STFTFrame = (Moduli,PhaseInc)
+
+-- | Frequency domain frame.
+type FFTOutput = V.Vector (Complex Double)
+
+-- | Type of FFT plans for real signals.
+type FFTPlan = FFTp.Plan Double (Complex Double)
+
+-- | Type of IFFT plans for real signals.
+type IFFTPlan = FFTp.Plan (Complex Double) Double
+
+-- | Configuration parameters for the phase vocoder algorithm.
+data VocoderParams = VocoderParams{
+    -- | FFT plan used in analysis stage.
+    fftPlan  :: FFTPlan,
+    -- | FFT plan used in synthesis stage.
+    ifftPlan :: IFFTPlan,
+    -- | STFT hop size.
+    hopSize :: HopSize,
+    -- | Window function used during analysis and synthesis.
+    fftWindow :: Window
     -- TODO thread safety?
 }
 
-frame_length :: Vocoder_params -> Length
-frame_length par = planInputSize $ fft_plan par
+-- | FFT frame length. Can be larger than `inputFrameLength` for zero-padding.
+frameLength :: VocoderParams -> Length
+frameLength par = planInputSize $ fftPlan par
 
-input_frame_length :: Vocoder_params -> Length
-input_frame_length par = V.length $ fft_window par
+-- | STFT frame length.
+inputFrameLength :: VocoderParams -> Length
+inputFrameLength par = V.length $ fftWindow par
 
-make_vocoder_params :: Length -> HopSize -> Window -> Vocoder_params
-make_vocoder_params len hs wnd = Vocoder_params (plan dftR2C len) (plan dftC2R len) hs wnd
+-- | Create a vocoder configuration.
+vocoderParams :: Length -> HopSize -> Window -> VocoderParams
+vocoderParams len hs wnd = VocoderParams (plan dftR2C len) (plan dftC2R len) hs wnd
 
+-- | Apply a window function on a time domain frame.
 applyWindow :: Window -> Frame -> Frame
 applyWindow = V.zipWith (*)
 
+-- | Change the vector indexing so that the sample at the middle has the number 0.
+-- This is done so that the FFT of the window has zero phase, and therefore does not
+-- introduce phase shifts in the signal.
 rewind :: (V.Storable a) => V.Vector a -> V.Vector a
 rewind vec = uncurry (V.++) $ swap $ V.splitAt (floor $ (fromIntegral $ V.length vec) /2) vec
 
-smart_add_zeropadding :: Length
+-- | Zero-pad the signal symmetrically from both sides.
+addZeroPadding :: Length
     -> Frame
     -> Frame
-smart_add_zeropadding len v
-    | diff < 0  = error $ "smart_add_zeropadding: input is " ++ (show diff) ++ " samples longer than target length"
+addZeroPadding len v
+    | diff < 0  = error $ "addZeroPadding: input is " ++ (show diff) ++ " samples longer than target length"
     | diff == 0 = v
     | otherwise = res
     where
     l = V.length v
     diff = len - l
-    większe_pół = diff - (floor $ fromIntegral diff / 2)
-    res = (V.++) ((V.++) (V.replicate większe_pół 0) v) (V.replicate (diff-większe_pół) 0)
+    halfdiff = diff - (floor $ fromIntegral diff / 2)
+    res = (V.++) ((V.++) (V.replicate halfdiff 0) v) (V.replicate (diff-halfdiff) 0)
 
-smart_fft_with_plan :: Vocoder_params -> Frame -> FFT_output
-smart_fft_with_plan par =
-    FFT.execute (fft_plan par) . rewind . smart_add_zeropadding (frame_length par) . applyWindow (fft_window par)
+-- | Perform FFT processing, which includes the actual FFT, rewinding, zero-paddding
+-- and windowing.
+doFFT :: VocoderParams -> Frame -> FFTOutput
+doFFT par =
+    FFT.execute (fftPlan par) . rewind . addZeroPadding (frameLength par) . applyWindow (fftWindow par)
 
-analysis_stage :: Vocoder_params -> Phase -> [Frame] -> (Phase, [SFT_block])
-analysis_stage par ph = mapAccumL (analysis_step (hop_size par) (frame_length par)) ph .  map (smart_fft_with_plan par)
+-- | Perform analysis on a sequence of frames. This consists of FFT processing
+-- and performing analysis on frequency domain frames.
+analysisStage :: VocoderParams -> Phase -> [Frame] -> (Phase, [STFTFrame])
+analysisStage par ph = mapAccumL (analysisStep (hopSize par) (frameLength par)) ph .  map (doFFT par)
 
-analysis_step :: HopSize -> Length -> Phase -> FFT_output -> (Phase,SFT_block)
-analysis_step h eN prev_ph vec =
+-- | Analyze a frequency domain frame. Phase from a previous frame must be supplied.
+-- It returns the phase of the analyzed frame and the result.
+analysisStep :: HopSize -> Length -> Phase -> FFTOutput -> (Phase, STFTFrame)
+analysisStep h eN prev_ph vec =
     (ph,(mag,ph_inc))
     where
     ph = V.map phase vec
     mag = V.map magnitude vec
-    ph_inc = V.imap (calc_phase_inc eN h) $ V.zipWith (-) ph prev_ph
+    ph_inc = V.imap (calcPhaseInc eN h) $ V.zipWith (-) ph prev_ph
 
+-- | Wraps an angle (in radians) to the range [-pi : pi].
 wrap :: Double -> Double
 wrap e = (e+pi) `mod'` (2*pi) - pi
 
-calc_phase_inc :: Length -> HopSize -> Int -> Double -> Double
-calc_phase_inc eN hop k ph_diff =
+calcPhaseInc :: Length -> HopSize -> Int -> Double -> Double
+calcPhaseInc eN hop k ph_diff =
     (omega + wrap (ph_diff - omega)) / fromIntegral hop
     where
     omega = (2*pi*fromIntegral k*fromIntegral hop) / fromIntegral eN
 
-synthesis_stage :: Vocoder_params -> Phase -> [SFT_block] -> (Phase,[Frame])
-synthesis_stage par ph hop_and_block_list =
-    (id *** back_to_time_domain)
-    $ mapAccumL (synthesis_step (hop_size par)) ph hop_and_block_list
-    where
-    back_to_time_domain :: [FFT_output] -> [V.Vector Double]
-    back_to_time_domain = map (smart_ifft_with_plan par)
+-- | Perform synthesis on a sequence of frames. This consists of performing
+-- synthesis and IFFT processing.
+synthesisStage :: VocoderParams -> Phase -> [STFTFrame] -> (Phase,[Frame])
+synthesisStage par ph hop_and_block_list =
+    (id *** map (doIFFT par)) $ mapAccumL (synthesisStep (hopSize par)) ph hop_and_block_list
 
-synthesis_step :: HopSize -> Phase -> SFT_block -> (Phase, FFT_output)
-synthesis_step hop ph (mag, ph_inc) =
+-- | Synthesize a frequency domain frame. Phase from the previously synthesized frame
+-- must be supplied. It returns the phase of the synthesized frame and the result.
+synthesisStep :: HopSize -> Phase -> STFTFrame -> (Phase, FFTOutput)
+synthesisStep hop ph (mag, ph_inc) =
     (new_ph, V.zipWith mkPolar mag new_ph)
     where
     new_ph = V.zipWith (+) ph $ V.map (* fromIntegral hop) ph_inc
 
-smart_ifft_with_plan :: Vocoder_params -> FFT_output -> Frame
-smart_ifft_with_plan par =
-    applyWindow (fft_window par) . cut_center (input_frame_length par) . rewind . FFT.execute (ifft_plan par)
+-- | Perform IFFT processing, which includes the actual IFFT, rewinding, removing padding
+-- and windowing.
+doIFFT :: VocoderParams -> FFTOutput -> Frame
+doIFFT par =
+    applyWindow (fftWindow par) . cutCenter (inputFrameLength par) . rewind . FFT.execute (ifftPlan par)
 
-cut_center :: (V.Storable a) => Length -> V.Vector a -> V.Vector a
-cut_center len vec = V.take len $ V.drop (floor $ (fromIntegral $ V.length vec - len)/2) vec
+-- | Cut the center of a time domain frame, discarding zero padding.
+cutCenter :: (V.Storable a) => Length -> V.Vector a -> V.Vector a
+cutCenter len vec = V.take len $ V.drop (floor $ (fromIntegral $ V.length vec - len)/2) vec
 
-zero_phase :: Vocoder_params -> Phase
-zero_phase par = V.replicate (planOutputSize $ fft_plan par) 0
+-- | Zero phase for a given vocoder configuration.
+-- Can be used to initialize the synthesis stage.
+zeroPhase :: VocoderParams -> Phase
+zeroPhase par = V.replicate (planOutputSize $ fftPlan par) 0
 
-volume_coeff :: Vocoder_params -> Double
-volume_coeff par = fromIntegral (hop_size par) / V.sum (V.map (**2) $ fft_window par)
+-- | An amplitude change coefficient for the processing pipeline.
+-- Can be used to ensure that the output has the same volume as the input.
+volumeCoeff :: VocoderParams -> Double
+volumeCoeff par = fromIntegral (hopSize par) / V.sum (V.map (**2) $ fftWindow par)
 

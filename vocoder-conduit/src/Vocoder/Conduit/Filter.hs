@@ -1,11 +1,20 @@
-module Vocoder.Conduit.Filter where
+module Vocoder.Conduit.Filter(
+      Filter,
+      realtimeFilter,
+      amplitudeFilter,
+      linearAmplitudeFilter,
+      lowpassBrickwall,
+      highpassBrickwall,
+      bandpassBrickwall,
+      bandstopBrickwall
+    ) where
 
 import Vocoder
 import qualified Vocoder.Filter as F
 import Data.Conduit
 import qualified Data.Conduit.Combinators as DCC
 
-type Filter f m = F.FreqStep -> ConduitT (f SFT_block) (f SFT_block) m ()
+type Filter f m = F.FreqStep -> ConduitT (f STFTFrame) (f STFTFrame) m ()
 
 realtimeFilter :: (Functor f, Monad m) => F.Filter -> Filter f m
 realtimeFilter f step = DCC.map $ fmap $ f step
