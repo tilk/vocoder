@@ -25,5 +25,5 @@ processA par c src = AudioSource newSource (rate src) (channels src) (frames src
              .| (processF par (phs, phs) (DCC.map getZipList .| c freqStep .| DCC.map ZipList) >> return ()) 
              .| DCC.map getZipList
              .| DCC.map interleave
-             .| sumFramesWithE 0 (V.zipWith (+)) (chunkSize * channels src) (hopSize par * channels src) 
+             .| sumFramesWithE (chunkSize * channels src) (hopSize par * channels src) 
 
