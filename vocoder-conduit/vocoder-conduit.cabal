@@ -40,3 +40,13 @@ test-suite  test-vocoder-conduit
                      QuickCheck >= 2.14 && < 2.15
   ghc-options:       -Wall
 
+benchmark  bench-vocoder-conduit
+  default-language:  Haskell2010
+  type:              exitcode-stdio-1.0
+  hs-source-dirs:    benchmarks
+  main-is:           main.hs
+  build-depends:     base, vector, vector-fftw, conduit, vocoder, vocoder-conduit,
+                     gauge >= 0.2.5
+  ghc-options:       -Wall -O2 -rtsopts
+  
+
