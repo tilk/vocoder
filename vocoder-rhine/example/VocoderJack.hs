@@ -10,6 +10,8 @@ import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import Control.Concurrent
 import Control.Monad
+import Vocoder
+import Vocoder.Window
 import Vocoder.Rhine
 import FRP.Rhine
 import MVarClock
@@ -17,6 +19,25 @@ import MVarClock
 type AudioV = V.Vector Audio.Sample
 
 type EventIO = EventMVarT AudioV IO
+
+data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
+
+data Options = Options {
+    optMaybeFrameSize :: Maybe Length,
+    optWindowSize :: Length,
+    optHopSize :: HopSize,
+    optWindowType :: WindowType
+}
+
+optFrameSize opts = maybe (optWindowSize opts) id $ optMaybeFrameSize opts
+
+optWindow opts = windowFun (optWindowType opts) (optWindowSize opts)
+
+windowFun BoxWindow = boxWindow
+windowFun HammingWindow = hammingWindow
+windowFun HannWindow = hannWindow
+windowFun BlackmanWindow = blackmanWindow
+windowFun FlatTopWindow = flatTopWindow
 
 processing :: (MonadIO m, Tag cl ~ AudioV) => MVar AudioV -> ClSF m cl () ()
 processing omvar = tagS >>> arrMCl (liftIO . fmap (const ()) . tryPutMVar omvar)
