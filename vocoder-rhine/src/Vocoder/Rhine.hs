@@ -2,6 +2,7 @@ module Vocoder.Rhine where
 
 import FRP.Rhine
 import Data.Tuple(swap)
+import Data.Maybe(fromMaybe)
 import Data.Foldable
 import qualified Data.Vector.Storable as V
 import qualified Data.Sequence as DS
@@ -32,6 +33,12 @@ framesOfS chunkSize hopSize = mealy f $ DS.fromList $ map (id &&& return . flip 
 sumFramesS :: Monad m => Length -> HopSize -> MSF m [Frame] Frame
 sumFramesS chunkSize hopSize = mealy f DS.empty
     where
-    f :: [Frame] -> DS.Seq () -> (Frame, DS.Seq ())
-    f nexts q = undefined
+    f :: [Frame] -> DS.Seq (Length, Frame) -> (Frame, DS.Seq (Length, Frame))
+    f nexts q = (next, q'')
+        where
+        ith i (n, c0) = fromMaybe 0 $ c0 V.!? (i - n)
+        q' = q DS.>< DS.fromList (zip [0, hopSize..] nexts)
+        next = V.generate chunkSize $ \i -> sum $ fmap (ith i) q'
+        q'' = fmap ((+ (-chunkSize)) *** id) $ DS.dropWhileL (\(n, c) -> V.length c + n <= chunkSize) q'
+
 
