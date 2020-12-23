@@ -46,15 +46,15 @@ sumFramesWithE chunkSize hopSize = process 0 DS.empty
         publishRest q | DS.null q = return ()
                       | otherwise = publish q >> publishRest (nextq q)
         nextq q = fmap ((+ (-chunkSize)) *** id) $ DS.dropWhileL (\(n, c) -> Seq.lengthIndex c + n <= chunkSize) q
-        process2 next sofar q
+        process2 sofar q
             | sofar >= chunkSize = do
                 publish q
-                process2 next (sofar - chunkSize) $ nextq q
-            | otherwise = process (sofar + hopSize) (q DS.|> (sofar, next))
+                process2 (sofar - chunkSize) $ nextq q
+            | otherwise = process (sofar + hopSize) q
         process sofar q = do
             next <- await
             case next of
                 Nothing -> publishRest q
-                Just next' -> process2 next' sofar q
+                Just next' -> process2 sofar (q DS.|> (sofar, next'))
 
 
