@@ -22,8 +22,11 @@ synthesis par = mealy $ \a s -> swap $ synthesisStage par s a
 process :: Monad m => VocoderParams -> MSF m [STFTFrame] [STFTFrame] -> MSF m [Frame] [Frame]
 process par msf = analysis par (zeroPhase par) >>> msf >>> synthesis par (zeroPhase par)
 
+volumeFixS :: Monad m => VocoderParams -> MSF m Frame Frame
+volumeFixS par = arr $ V.map (* volumeCoeff par)
+
 processS :: Monad m => VocoderParams -> MSF m [STFTFrame] [STFTFrame] -> MSF m Frame Frame
-processS par msf = (framesOfS (inputFrameLength par) (hopSize par) >>> process par msf) &&& arr V.length >>> sumFramesWithLengthS (hopSize par)
+processS par msf = (framesOfS (inputFrameLength par) (hopSize par) >>> process par msf) &&& arr V.length >>> sumFramesWithLengthS (hopSize par) >>> volumeFixS par
 
 framesOfS :: forall a m. (V.Storable a, Num a, Monad m) => Length -> HopSize -> MSF m (V.Vector a) [V.Vector a]
 framesOfS chunkSize hopSize = mealy f $ DS.fromList $ reverse $ map (id &&& return . flip V.replicate 0) [hopSize, hopSize*2 .. chunkSize-1]
