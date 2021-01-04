@@ -6,10 +6,8 @@ import Control.Monad
 import Data.Conduit
 import Data.Foldable
 import Data.MonoTraversable
-import Data.List(foldl')
 import Data.Maybe(fromMaybe)
 import qualified Data.Conduit.Internal as DCI
-import qualified Data.Sequence as DS
 import qualified Data.Sequences as Seq
 
 cfirst :: Monad m => a -> ConduitT i o m r -> ConduitT (i, a) (o, a) m r
@@ -22,30 +20,30 @@ cfirst a0 (DCI.ConduitT c0) = DCI.ConduitT $ \rest -> let
     in go a0 (c0 DCI.Done)
 
 framesOfE :: (Monad m, Seq.IsSequence seq) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
-framesOfE chunkSize hopSize = process 0 DS.empty
+framesOfE chunkSize hopSize = process 0 []
     where
         process !sofar q = do
             next <- await
             case next of
                 Nothing -> case q of
-                    DS.Empty -> return ()
-                    h DS.:<| _ -> leftover (mconcat . reverse . snd $ h)
+                    [] -> return ()
+                    h : _ -> leftover (mconcat . reverse . snd $ h)
                 Just next' -> do
                     let len = Seq.lengthIndex next'
                     let newChunks = map ((len -) &&& (Seq.singleton . flip Seq.drop next')) [sofar, sofar + hopSize .. len-1]
-                    let q' = fmap ((len +) *** (next' :)) q DS.>< DS.fromList newChunks
-                    let (r, q'') = DS.spanl ((>= chunkSize) . fst) q'
+                    let q' = fmap ((len +) *** (next' :)) q ++ newChunks
+                    let (r, q'') = span ((>= chunkSize) . fst) q'
                     forM_ (map (Seq.take chunkSize . mconcat . reverse . snd) $ toList r) yield
                     process ((sofar - len) `mod` hopSize) q''
 
 sumFramesWithE :: (Monad m, Seq.IsSequence seq, Num (Element seq)) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
-sumFramesWithE chunkSize hopSize = process 0 DS.empty
+sumFramesWithE chunkSize hopSize = process 0 []
     where
         ith i (n, c0) = fromMaybe 0 $ Seq.index c0 (i - n)
         publish q = yield $ Seq.fromList $ map (\i -> sum $ fmap (ith i) q) [0 .. chunkSize-1]
-        publishRest q | DS.null q = return ()
+        publishRest q | null q    = return ()
                       | otherwise = publish q >> publishRest (nextq q)
-        nextq q = fmap ((+ (-chunkSize)) *** id) $ DS.dropWhileL (\(n, c) -> Seq.lengthIndex c + n <= chunkSize) q
+        nextq q = fmap ((+ (-chunkSize)) *** id) $ dropWhile (\(n, c) -> Seq.lengthIndex c + n <= chunkSize) q
         process2 sofar q
             | sofar >= chunkSize = do
                 publish q
@@ -55,6 +53,6 @@ sumFramesWithE chunkSize hopSize = process 0 DS.empty
             next <- await
             case next of
                 Nothing -> publishRest q
-                Just next' -> process2 sofar (q DS.|> (sofar, next'))
+                Just next' -> process2 sofar (q ++ [(sofar, next')])
 
 
