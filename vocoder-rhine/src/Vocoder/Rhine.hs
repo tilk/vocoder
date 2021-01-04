@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Vocoder.Rhine where
 
 import FRP.Rhine
@@ -18,10 +19,10 @@ analysis par = mealy $ \a s -> swap $ analysisStage par s a
 synthesis :: Monad m => VocoderParams -> Phase -> MSF m [STFTFrame] [Frame]
 synthesis par = mealy $ \a s -> swap $ synthesisStage par s a
 
-framesOfS :: Monad m => Length -> HopSize -> MSF m Frame [Frame]
+framesOfS :: forall a m. (V.Storable a, Num a, Monad m) => Length -> HopSize -> MSF m (V.Vector a) [V.Vector a]
 framesOfS chunkSize hopSize = mealy f $ DS.fromList $ reverse $ map (id &&& return . flip V.replicate 0) [hopSize, hopSize*2 .. chunkSize-1]
     where
-    f :: Frame -> DS.Seq (Length, [Frame]) -> ([Frame], DS.Seq (Length, [Frame]))
+    f :: V.Vector a -> DS.Seq (Length, [V.Vector a]) -> ([V.Vector a], DS.Seq (Length, [V.Vector a]))
     f next q = (outs, q'')
         where
         len = V.length next
@@ -30,10 +31,10 @@ framesOfS chunkSize hopSize = mealy f $ DS.fromList $ reverse $ map (id &&& retu
         (r, q'') = DS.spanl ((>= chunkSize) . fst) q'
         outs = map (V.take chunkSize . mconcat . reverse . snd) $ toList r
 
-sumFramesS :: Monad m => Length -> HopSize -> MSF m [Frame] Frame
+sumFramesS :: forall a m. (V.Storable a, Num a, Monad m) => Length -> HopSize -> MSF m [V.Vector a] (V.Vector a)
 sumFramesS chunkSize hopSize = mealy f DS.empty
     where
-    f :: [Frame] -> DS.Seq (Length, Frame) -> (Frame, DS.Seq (Length, Frame))
+    f :: [V.Vector a] -> DS.Seq (Length, V.Vector a) -> (V.Vector a, DS.Seq (Length, V.Vector a))
     f nexts q = (next, q'')
         where
         ith i (n, c0) = fromMaybe 0 $ c0 V.!? (i - n)
