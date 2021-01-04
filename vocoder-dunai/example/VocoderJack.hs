@@ -10,6 +10,7 @@ import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import Control.Concurrent
 import Control.Monad
+import Control.Arrow
 import Vocoder
 import Vocoder.Window
 import Vocoder.Dunai
@@ -39,24 +40,29 @@ windowFun HannWindow = hannWindow
 windowFun BlackmanWindow = blackmanWindow
 windowFun FlatTopWindow = flatTopWindow
 
-processing :: (MonadIO m, Tag cl ~ AudioV) => MVar AudioV -> ClSF m cl () ()
-processing omvar = tagS >>> arrMCl (liftIO . fmap (const ()) . tryPutMVar omvar)
+paramsFor opts = vocoderParams (optFrameSize opts) (optHopSize opts) (optWindow opts)
+
+processing :: (MonadIO m, Tag cl ~ AudioV) => Options -> MVar AudioV -> ClSF m cl () ()
+processing opts omvar = tagS >>> arr (V.map realToFrac) >>> timeless (processS params $ arr id) >>> arr (V.map realToFrac) >>> arrMCl (liftIO . fmap (const ()) . tryPutMVar omvar)
+    where
+    params = paramsFor opts
 
 main :: IO ()
 main = do
     imvar <- newEmptyMVar
     omvar <- newEmptyMVar 
-    forkIO $ flow $ processing omvar @@ (mVarClockOn imvar :: HoistClock EventIO IO (MVarClock AudioV))
+    let opts = Options Nothing 512 32 HammingWindow
+    forkIO $ flow $ processing opts omvar @@ (mVarClockOn imvar :: HoistClock EventIO IO (MVarClock AudioV))
     JACK.handleExceptions $ 
         JACK.withClientDefault "vocoder-jack" $ \client -> 
         JACK.withPort client "input" $ \iport ->
         JACK.withPort client "output" $ \oport ->
-        JACK.withProcess client (lift . process imvar omvar iport oport) $
+        JACK.withProcess client (lift . processJack imvar omvar iport oport) $
         JACK.withActivation client $
         lift $ JACK.waitForBreak
     
-process :: MVar AudioV -> MVar AudioV -> Audio.Port JACK.Input -> Audio.Port JACK.Output -> JACK.NFrames -> IO ()
-process imvar omvar iport oport nframes@(JACK.NFrames frames) = do
+processJack :: MVar AudioV -> MVar AudioV -> Audio.Port JACK.Input -> Audio.Port JACK.Output -> JACK.NFrames -> IO ()
+processJack imvar omvar iport oport nframes@(JACK.NFrames frames) = do
     iArr <- Audio.getBufferArray iport nframes
     oArr <- Audio.getBufferArray oport nframes
     iVec <- V.generateM (fromIntegral frames) $ \i -> fmap realToFrac $ A.readArray iArr $ JACK.NFrames $ fromIntegral i
