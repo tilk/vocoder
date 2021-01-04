@@ -19,7 +19,7 @@ synthesis :: Monad m => VocoderParams -> Phase -> MSF m [STFTFrame] [Frame]
 synthesis par = mealy $ \a s -> swap $ synthesisStage par s a
 
 framesOfS :: Monad m => Length -> HopSize -> MSF m Frame [Frame]
-framesOfS chunkSize hopSize = mealy f $ DS.fromList $ map (id &&& return . flip V.replicate 0) [hopSize, hopSize*2 .. chunkSize-1]
+framesOfS chunkSize hopSize = mealy f $ DS.fromList $ reverse $ map (id &&& return . flip V.replicate 0) [hopSize, hopSize*2 .. chunkSize-1]
     where
     f :: Frame -> DS.Seq (Length, [Frame]) -> ([Frame], DS.Seq (Length, [Frame]))
     f next q = (outs, q'')
