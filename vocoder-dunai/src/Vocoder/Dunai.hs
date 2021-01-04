@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Vocoder.Rhine where
+module Vocoder.Dunai where
 
-import FRP.Rhine
+import Data.MonadicStreamFunction
 import Data.Tuple(swap)
 import Data.Maybe(fromMaybe)
 import Data.Foldable

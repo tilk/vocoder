@@ -6,8 +6,7 @@ import Test.QuickCheck
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.MonadicStreamFunction
 import qualified Data.Vector.Storable as V
-import Vocoder
-import Vocoder.Rhine
+import Vocoder.Dunai
 
 shrinkOne :: (a -> [a]) -> [a] -> [[a]]
 shrinkOne _   []     = []

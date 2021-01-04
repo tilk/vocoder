@@ -12,7 +12,7 @@ import Control.Concurrent
 import Control.Monad
 import Vocoder
 import Vocoder.Window
-import Vocoder.Rhine
+import Vocoder.Dunai
 import FRP.Rhine
 import MVarClock
 
