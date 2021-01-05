@@ -1,4 +1,5 @@
 .cabal-sandbox
 cabal.sandbox.config
 *.swp
-dist
+dist/
+dist-newstyle/
