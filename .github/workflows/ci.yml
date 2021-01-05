@@ -1,0 +1,22 @@
+name: CI
+
+on: [pull_request, push]
+
+jobs:
+    cabal:
+        name: CI
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v2
+          - uses: haskell/actions/setup@v1
+            with:
+              ghc-version: '8.4.4'
+          - name: install required packages
+            run: sudo apt-get install libfftw3-dev libsndfile1-dev libjack-jackd2-dev
+          - name: build
+            run: cabal v2-build all --enable-tests --enable-benchmarks --enable-documentation
+          - name: test
+            run: cabal v2-test all
+          - name: bench
+            run: cabal v2-bench all
+
