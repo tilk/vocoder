@@ -19,4 +19,9 @@ jobs:
             run: cabal v2-test all
           - name: bench
             run: cabal v2-bench all
+          - name: archive artifacts
+            uses: actions/upload-artifact@v2
+            with:
+              name: dist
+              path: dist-newstyle
 
