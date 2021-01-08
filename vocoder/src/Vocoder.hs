@@ -125,8 +125,8 @@ doFFT par =
 
 -- | Perform analysis on a sequence of frames. This consists of FFT processing
 -- and performing analysis on frequency domain frames.
-analysisStage :: VocoderParams -> Phase -> [Frame] -> (Phase, [STFTFrame])
-analysisStage par ph = mapAccumL (analysisStep (hopSize par) (frameLength par)) ph .  map (doFFT par)
+analysisStage :: Traversable t => VocoderParams -> Phase -> t Frame -> (Phase, t STFTFrame)
+analysisStage par ph = mapAccumL (analysisStep (hopSize par) (frameLength par)) ph .  fmap (doFFT par)
 
 -- | Analyze a frequency domain frame. Phase from a previous frame must be supplied.
 -- It returns the phase of the analyzed frame and the result.
@@ -150,9 +150,9 @@ calcPhaseInc eN hop k ph_diff =
 
 -- | Perform synthesis on a sequence of frames. This consists of performing
 -- synthesis and IFFT processing.
-synthesisStage :: VocoderParams -> Phase -> [STFTFrame] -> (Phase,[Frame])
+synthesisStage :: Traversable t => VocoderParams -> Phase -> t STFTFrame -> (Phase, t Frame)
 synthesisStage par ph hop_and_block_list =
-    (id *** map (doIFFT par)) $ mapAccumL (synthesisStep (hopSize par)) ph hop_and_block_list
+    (id *** fmap (doIFFT par)) $ mapAccumL (synthesisStep (hopSize par)) ph hop_and_block_list
 
 -- | Synthesize a frequency domain frame. Phase from the previously synthesized frame
 -- must be supplied. It returns the phase of the synthesized frame and the result.
