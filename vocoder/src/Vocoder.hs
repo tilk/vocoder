@@ -1,3 +1,13 @@
+{-| 
+    Module      : Vocoder
+    Description : Phase vocoder
+    Copyright   : (c) Marek Materzok, 2021
+    License     : BSD2
+
+This module implements the phase vocoder algorithms. 
+The implementation is designed to be used directly or to be integrated
+into some convenient abstraction (streaming or FRP).
+-}
 module Vocoder (
       Moduli,
       Phase,
@@ -59,7 +69,7 @@ type HopSize = Int
 type Length = Int
 
 -- | STFT processing unit.
-type STFTFrame = (Moduli,PhaseInc)
+type STFTFrame = (Moduli, PhaseInc)
 
 -- | Frequency domain frame.
 type FFTOutput = V.Vector (Complex Double)

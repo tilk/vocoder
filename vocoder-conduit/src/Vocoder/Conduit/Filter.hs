@@ -1,5 +1,16 @@
+{-| 
+    Module      : Vocoder.Conduit.Filter
+    Description : Frequency-domain filters in Conduit
+    Copyright   : (c) Marek Materzok, 2021
+    License     : BSD2
+
+This module defines some useful frequency-domain filters as conduits.
+It includes convenience wrappers for filters defined in the vocoder package.
+-}
+{-# LANGUAGE RankNTypes #-}
 module Vocoder.Conduit.Filter(
       Filter,
+      runFilter,
       realtimeFilter,
       amplitudeFilter,
       linearAmplitudeFilter,
@@ -14,26 +25,37 @@ import qualified Vocoder.Filter as F
 import Data.Conduit
 import qualified Data.Conduit.Combinators as DCC
 
-type Filter f m = F.FreqStep -> ConduitT (f STFTFrame) (f STFTFrame) m ()
+-- | Conduit frequency-domain filter type. A conduit filter extends 
+--   basic frequency-domain filters by using a conduit instead of a
+--   pure function. This enables time transformation filters.
+newtype Filter m = Filter { runFilter :: forall f. Functor f => F.FreqStep -> ConduitT (f STFTFrame) (f STFTFrame) m () }
 
-realtimeFilter :: (Functor f, Monad m) => F.Filter -> Filter f m
-realtimeFilter f step = DCC.map $ fmap $ f step
+-- | Use a basic frequency-domain filter as a conduit filter.
+realtimeFilter :: Monad m => F.Filter -> Filter m
+realtimeFilter f = Filter (\step -> DCC.map $ fmap $ f step)
 
-amplitudeFilter :: (Functor f, Monad m) => (F.FreqStep -> Moduli -> Moduli) -> Filter f m
+-- | Creates a conduit filter which transforms only amplitudes, leaving
+--   phase increments unchanged.
+amplitudeFilter :: Monad m => (F.FreqStep -> Moduli -> Moduli) -> Filter m
 amplitudeFilter = realtimeFilter . F.amplitudeFilter
 
-linearAmplitudeFilter :: (Functor f, Monad m) => (Double -> Double) -> Filter f m
+-- | Creates a filter which scales amplitudes depending on frequency.
+linearAmplitudeFilter :: Monad m => (Double -> Double) -> Filter m
 linearAmplitudeFilter = realtimeFilter . F.linearAmplitudeFilter
 
-lowpassBrickwall :: (Functor f, Monad m) => Double -> Filter f m
+-- | Creates a brickwall lowpass filter.
+lowpassBrickwall :: Monad m => Double -> Filter m
 lowpassBrickwall t = realtimeFilter $ F.lowpassBrickwall t
 
-highpassBrickwall :: (Functor f, Monad m) => Double -> Filter f m
+-- | Creates a brickwall highpass filter.
+highpassBrickwall :: Monad m => Double -> Filter m
 highpassBrickwall t = realtimeFilter $ F.highpassBrickwall t
 
-bandpassBrickwall :: (Functor f, Monad m) => Double -> Double -> Filter f m
+-- | Creates a brickwall bandpass filter.
+bandpassBrickwall :: Monad m => Double -> Double -> Filter m
 bandpassBrickwall t u = realtimeFilter $ F.bandpassBrickwall t u
 
-bandstopBrickwall :: (Functor f, Monad m) => Double -> Double -> Filter f m
+-- | Creates a brickwall bandstop filter.
+bandstopBrickwall :: Monad m => Double -> Double -> Filter m
 bandstopBrickwall t u = realtimeFilter $ F.bandstopBrickwall t u
 

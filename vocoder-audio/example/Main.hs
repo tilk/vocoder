@@ -23,7 +23,7 @@ data Options = Options {
     windowSize :: Length,
     hopSizeO :: HopSize,
     windowType :: WindowType,
-    filterOpt :: Filter [] (ResourceT IO)
+    filterOpt :: Filter (ResourceT IO)
 }
 
 frameSize :: Options -> Length
@@ -45,7 +45,7 @@ auto2 = maybeReader $ f . splitOn ","
     f [a,b] = (,) <$> readMaybe a  <*> readMaybe b
     f _ = Nothing
 
-filterP :: (Functor f, Monad m) => Parser (Filter f m)
+filterP :: Monad m => Parser (Filter m)
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
             <> metavar "FREQ"

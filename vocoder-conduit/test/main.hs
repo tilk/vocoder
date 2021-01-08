@@ -7,7 +7,7 @@ import Data.Functor.Identity (Identity)
 import Data.Conduit ((.|), ConduitT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
-import Vocoder.Conduit.Utils
+import Vocoder.Conduit.Frames
 
 runConduitList :: ConduitT a b Identity () -> [a] -> [b]
 runConduitList c l = C.runConduitPure $ CL.sourceList l .| c .| CL.consume
@@ -21,8 +21,8 @@ listFramesOfE chunkSize hopSize input =
     where 
     cInput = concat input
 
-listSumFramesWithE :: Int -> Int -> [[Int]] -> [[Int]]
-listSumFramesWithE chunkSize hopSize input = map (\i -> take chunkSize $ drop i cOutput) [0, chunkSize .. lastLength]
+listSumFramesE :: Int -> Int -> [[Int]] -> [[Int]]
+listSumFramesE chunkSize hopSize input = map (\i -> take chunkSize $ drop i cOutput) [0, chunkSize .. lastLength]
     where 
     cOutput = foldl1 (zipWith (+)) $ zipWith (\k l -> replicate k 0 ++ l ++ repeat 0) [0, hopSize..] input
     lastLength = maximum $ -1 : zipWith (\k l -> k + length l - 1) [0, hopSize..] input
@@ -30,6 +30,6 @@ listSumFramesWithE chunkSize hopSize input = map (\i -> take chunkSize $ drop i 
 main :: IO ()
 main = hspec $ do
     prop "framesOfE" $ \(Positive chunkSize) (Positive hopSize) -> equivToList (listFramesOfE @Int chunkSize hopSize) (framesOfE chunkSize hopSize)
-    prop "sumFramesWithE" $ \(Positive chunkSize) (Positive hopSize) -> equivToList (listSumFramesWithE chunkSize hopSize) (sumFramesWithE chunkSize hopSize) . map getNonEmpty
+    prop "sumFramesE" $ \(Positive chunkSize) (Positive hopSize) -> equivToList (listSumFramesE chunkSize hopSize) (sumFramesE chunkSize hopSize) . map getNonEmpty
 
 

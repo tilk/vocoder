@@ -110,7 +110,7 @@ processing :: (MonadIO m, Tag cl ~ AudioV) => JACK.Client -> Options -> MVar Aud
 processing client opts omvar = 
             tagS 
         >>> arr (V.map realToFrac) 
-        >>> timeless (processS params $ arrM $ runFilter client opts)
+        >>> timeless (process params $ arrM $ runFilter client opts)
         >>> arr (V.map realToFrac) 
         >>> arrMCl (liftIO . fmap (const ()) . tryPutMVar omvar)
     where

@@ -1,5 +1,14 @@
+{-| 
+    Module      : Vocoder.Conduit.Frames
+    Description : Frame processing
+    Copyright   : (c) Marek Materzok, 2021
+    License     : BSD2
+-}
 {-# LANGUAGE BangPatterns, FlexibleContexts #-}
-module Vocoder.Conduit.Utils where
+module Vocoder.Conduit.Frames (
+    framesOfE,
+    sumFramesE
+    ) where
 
 import Control.Arrow
 import Control.Monad
@@ -7,18 +16,10 @@ import Data.Conduit
 import Data.Foldable
 import Data.MonoTraversable
 import Data.Maybe(fromMaybe)
-import qualified Data.Conduit.Internal as DCI
 import qualified Data.Sequences as Seq
 
-cfirst :: Monad m => a -> ConduitT i o m r -> ConduitT (i, a) (o, a) m r
-cfirst a0 (DCI.ConduitT c0) = DCI.ConduitT $ \rest -> let
-    go a (DCI.HaveOutput p o) = DCI.HaveOutput (go a p) (o, a)
-    go a (DCI.NeedInput p c) = DCI.NeedInput (\(i, a') -> go a' $ p i) (go a . c)
-    go _ (DCI.Done r) = rest r
-    go a (DCI.PipeM mp) = DCI.PipeM (liftM (go a) mp)
-    go a (DCI.Leftover p i) = DCI.Leftover (go a p) (i, a)
-    in go a0 (c0 DCI.Done)
-
+-- | Splits a chunked input stream into overlapping frames of constant size
+--   suitable for STFT processing.
 framesOfE :: (Monad m, Seq.IsSequence seq) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
 framesOfE chunkSize hopSize = process 0 []
     where
@@ -36,8 +37,9 @@ framesOfE chunkSize hopSize = process 0 []
                     forM_ (map (Seq.take chunkSize . mconcat . reverse . snd) $ toList r) yield
                     process ((sofar - len) `mod` hopSize) q''
 
-sumFramesWithE :: (Monad m, Seq.IsSequence seq, Num (Element seq)) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
-sumFramesWithE chunkSize hopSize = process 0 []
+-- | Builds a chunked output stream from a stream of overlapping frames.
+sumFramesE :: (Monad m, Seq.IsSequence seq, Num (Element seq)) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
+sumFramesE chunkSize hopSize = process 0 []
     where
         ith i (n, c0) = fromMaybe 0 $ Seq.index c0 (i - n)
         publish q = yield $ Seq.fromList $ map (\i -> sum $ fmap (ith i) q) [0 .. chunkSize-1]
