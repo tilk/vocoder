@@ -8,7 +8,6 @@ import Data.Array.Storable as A
 import Data.List.Split
 import Text.Read hiding (lift)
 import Control.Monad.Trans.Class(lift)
-import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import Control.Concurrent
 import Control.Monad
@@ -35,16 +34,20 @@ data Options = Options {
     optFilter :: Filter
 }
 
+optFrameSize :: Options -> Length
 optFrameSize opts = maybe (optWindowSize opts) id $ optMaybeFrameSize opts
 
+optWindow :: Options -> Window
 optWindow opts = windowFun (optWindowType opts) (optWindowSize opts)
 
+windowFun :: WindowType -> Length -> Window
 windowFun BoxWindow = boxWindow
 windowFun HammingWindow = hammingWindow
 windowFun HannWindow = hannWindow
 windowFun BlackmanWindow = blackmanWindow
 windowFun FlatTopWindow = flatTopWindow
 
+paramsFor :: Options -> VocoderParams
 paramsFor opts = vocoderParams (optFrameSize opts) (optHopSize opts) (optWindow opts)
 
 auto2 :: (Read a, Read b) => ReadM (a, b)
@@ -53,6 +56,7 @@ auto2 = maybeReader $ f . splitOn ","
     f [a,b] = (,) <$> readMaybe a  <*> readMaybe b
     f _ = Nothing
 
+filterP :: Parser Filter
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
             <> metavar "FREQ"
@@ -96,6 +100,7 @@ options = Options
        <> help "Type of STFT window")
     <*> filterP
 
+runFilter :: MonadIO m => JACK.Client -> Options -> [STFTFrame] -> m [STFTFrame]
 runFilter client opts i = do
     rate <- liftIO $ JACK.getSampleRate client
     let freqStep = fromIntegral rate / fromIntegral (optFrameSize opts)
@@ -119,6 +124,7 @@ main = execParser opts >>= run
            <> progDesc "Process JACK stream"
            <> header "Phase vocoder audio processing")
 
+run :: Options -> IO ()
 run opts = do
     imvar <- newEmptyMVar
     omvar <- newEmptyMVar 
@@ -128,7 +134,7 @@ run opts = do
         JACK.withPort client "output" $ \oport ->
         JACK.withProcess client (lift . processJack imvar omvar iport oport) $
         JACK.withActivation client $ do
-            lift $ forkIO $ flow $ processing client opts omvar @@ (mVarClockOn imvar :: HoistClock EventIO IO (MVarClock AudioV))
+            _ <- lift $ forkIO $ flow $ processing client opts omvar @@ (mVarClockOn imvar :: HoistClock EventIO IO (MVarClock AudioV))
             lift $ JACK.waitForBreak
     
 processJack :: MVar AudioV -> MVar AudioV -> Audio.Port JACK.Input -> Audio.Port JACK.Output -> JACK.NFrames -> IO ()
@@ -136,7 +142,7 @@ processJack imvar omvar iport oport nframes@(JACK.NFrames frames) = do
     iArr <- Audio.getBufferArray iport nframes
     oArr <- Audio.getBufferArray oport nframes
     iVec <- V.generateM (fromIntegral frames) $ \i -> fmap realToFrac $ A.readArray iArr $ JACK.NFrames $ fromIntegral i
-    tryPutMVar imvar iVec
+    _ <- tryPutMVar imvar iVec
     moVec <- tryTakeMVar omvar
     case moVec of
         Just oVec ->

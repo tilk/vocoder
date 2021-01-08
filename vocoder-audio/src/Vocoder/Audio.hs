@@ -8,7 +8,6 @@ import Vocoder
 import Vocoder.Filter
 import Vocoder.Conduit
 import Vocoder.Conduit.Utils
-import qualified Data.Vector.Storable as V
 
 processA :: Monad m
          => VocoderParams
@@ -17,13 +16,13 @@ processA :: Monad m
          -> AudioSource m Double
 processA par c src = AudioSource newSource (rate src) (channels src) (frames src) where
     phs = ZipList $ replicate (channels src) $ zeroPhase par
-    freqStep = rate src / fromIntegral (frameLength par)
+    freqStep = rate src / fromIntegral (vocFrameLength par)
     newSource = source src 
-             .| framesOfE (inputFrameLength par * channels src) (hopSize par * channels src) 
+             .| framesOfE (vocInputFrameLength par * channels src) (vocHopSize par * channels src) 
              .| DCC.map (deinterleave $ channels src) 
              .| DCC.map ZipList
              .| (processF par (phs, phs) (DCC.map getZipList .| c freqStep .| DCC.map ZipList) >> return ()) 
              .| DCC.map getZipList
              .| DCC.map interleave
-             .| sumFramesWithE (chunkSize * channels src) (hopSize par * channels src) 
+             .| sumFramesWithE (chunkSize * channels src) (vocHopSize par * channels src) 
 

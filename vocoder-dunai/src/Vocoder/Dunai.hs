@@ -24,10 +24,11 @@ volumeFixS :: Monad m => VocoderParams -> MSF m Frame Frame
 volumeFixS par = arr $ V.map (* volumeCoeff par)
 
 processS :: Monad m => VocoderParams -> MSF m [STFTFrame] [STFTFrame] -> MSF m Frame Frame
-processS par msf = (framesOfS (inputFrameLength par) (hopSize par) >>> process par msf) &&& arr V.length >>> sumFramesWithLengthS (hopSize par) >>> volumeFixS par
+processS par msf = (framesOfS (vocInputFrameLength par) (vocHopSize par) >>> process par msf) &&& arr V.length >>> sumFramesWithLengthS (vocHopSize par) >>> volumeFixS par
 
 data P a = P {-# UNPACK #-} !Length {-# UNPACK #-} !(V.Vector a)
 
+mapP :: (Length -> Length) -> (V.Vector a1 -> V.Vector a2) -> P a1 -> P a2
 mapP f g (P n c) = P (f n) (g c)
 
 framesOfS :: forall a m. (V.Storable a, Num a, Monad m) => Length -> HopSize -> MSF m (V.Vector a) [V.Vector a]

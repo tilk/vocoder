@@ -20,10 +20,10 @@ volumeFix :: Monad m => VocoderParams -> ConduitT STFTFrame STFTFrame m ()
 volumeFix par = DCL.map $ V.map (* volumeCoeff par) *** id
 
 analysis :: Monad m => VocoderParams -> Phase -> ConduitT Frame STFTFrame m Phase
-analysis par ph = DCL.map (doFFT par) .| DCL.mapAccum (flip $ analysisStep (hopSize par) (frameLength par)) ph
+analysis par ph = DCL.mapAccum (flip $ analysisBlock par) ph
 
 synthesis :: Monad m => VocoderParams -> Phase -> ConduitT STFTFrame Frame m Phase
-synthesis par ph = DCL.mapAccum (flip $ synthesisStep (hopSize par)) ph `fuseUpstream` DCL.map (doIFFT par)
+synthesis par ph = DCL.mapAccum (flip $ synthesisBlock par) ph
 
 process :: Monad m => VocoderParams -> (Phase, Phase) -> ConduitT STFTFrame STFTFrame m r -> ConduitT Frame Frame m (r, (Phase, Phase))
 process par (p1, p2) c = (\((p1', r), p2') -> (r, (p1', p2'))) <$> analysis par p1 `fuseBoth` (volumeFix par .| c) `fuseBoth` synthesis par p2
@@ -35,10 +35,10 @@ volumeFixF :: (Applicative f, Monad m) => VocoderParams -> ConduitT (f STFTFrame
 volumeFixF par = DCL.map $ fmap $ V.map (* volumeCoeff par) *** id
 
 analysisF :: (Applicative f, Monad m) => VocoderParams -> f Phase -> ConduitT (f Frame) (f STFTFrame) m (f Phase)
-analysisF par ph = DCL.map (fmap $ doFFT par) .| DCL.mapAccum (app_help $ flip $ analysisStep (hopSize par) (frameLength par)) ph
+analysisF par ph = DCL.mapAccum (app_help $ flip $ analysisBlock par) ph
 
 synthesisF :: (Applicative f, Monad m) => VocoderParams -> f Phase -> ConduitT (f STFTFrame) (f Frame) m (f Phase)
-synthesisF par ph = DCL.mapAccum (app_help $ flip $ synthesisStep (hopSize par)) ph `fuseUpstream` DCL.map (fmap $ doIFFT par)
+synthesisF par ph = DCL.mapAccum (app_help $ flip $ synthesisBlock par) ph
 
 processF :: (Applicative f, Monad m) => VocoderParams -> (f Phase, f Phase) -> ConduitT (f STFTFrame) (f STFTFrame) m r -> ConduitT (f Frame) (f Frame) m (r, (f Phase, f Phase))
 processF par (p1, p2) c = (\((p1', r), p2') -> (r, (p1', p2'))) <$> analysisF par p1 `fuseBoth` (volumeFixF par .| c) `fuseBoth` synthesisF par p2

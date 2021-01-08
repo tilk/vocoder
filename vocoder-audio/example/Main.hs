@@ -1,7 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, PartialTypeSignatures #-}
 module Main where
 
-import System.Environment
 import Options.Applicative
 import Data.Semigroup ((<>))
 import Data.List.Split
@@ -11,13 +10,9 @@ import Vocoder.Window
 import Vocoder.Audio
 import Vocoder.Conduit.Filter
 import Sound.File.Sndfile
-import qualified Data.Conduit.Combinators as DCC
 import Data.Conduit.Audio
 import Data.Conduit.Audio.Sndfile
 import Control.Monad.Trans.Resource
-import Control.Arrow
-
-import qualified Data.Vector.Storable as V
 
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
 
@@ -31,10 +26,13 @@ data Options = Options {
     filterOpt :: Filter [] (ResourceT IO)
 }
 
+frameSize :: Options -> Length
 frameSize opts = maybe (windowSize opts) id $ optFrameSize opts
 
+windowFor :: Options -> Window
 windowFor opts = windowFun (windowType opts) (windowSize opts)
 
+windowFun :: WindowType -> Length -> Window
 windowFun BoxWindow = boxWindow
 windowFun HammingWindow = hammingWindow
 windowFun HannWindow = hannWindow
@@ -93,8 +91,10 @@ options = Options
        <> help "Type of STFT window")
     <*> filterP
 
+myFormat :: Format
 myFormat = Format {headerFormat = HeaderFormatWav, sampleFormat = SampleFormatPcm16, endianFormat = EndianFile}
 
+main :: IO ()
 main = execParser opts >>= process 
     where
     opts = info (options <**> helper)
@@ -104,7 +104,7 @@ main = execParser opts >>= process
 
 process :: Options -> IO ()
 process opts = do
-    src :: AudioSource _ Double <- sourceSnd $ sourceFile opts
+    src :: AudioSource (ResourceT IO) Double <- sourceSnd $ sourceFile opts
     let params = vocoderParams (frameSize opts) (hopSizeO opts) (windowFor opts)
     runResourceT $ sinkSnd (destFile opts) myFormat $ processA params (filterOpt opts) src
 
