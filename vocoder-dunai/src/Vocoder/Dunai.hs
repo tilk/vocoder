@@ -7,7 +7,6 @@ import Data.Tuple(swap)
 import Data.Maybe(fromMaybe)
 import Data.Foldable
 import qualified Data.Vector.Storable as V
-import qualified Data.Vector as VV
 import Vocoder
 
 volumeFix :: Monad m => VocoderParams -> MSF m STFTFrame STFTFrame
@@ -33,16 +32,17 @@ data P a = P {-# UNPACK #-} !Length {-# UNPACK #-} !(V.Vector a)
 mapP f g (P n c) = P (f n) (g c)
 
 framesOfS :: forall a m. (V.Storable a, Num a, Monad m) => Length -> HopSize -> MSF m (V.Vector a) [V.Vector a]
-framesOfS chunkSize hopSize = mealy f $ VV.fromList $ map (return . flip V.replicate 0) [hopSize, hopSize*2 .. chunkSize-1]
+framesOfS chunkSize hopSize = mealy f $ V.replicate bufLen 0
     where
-    f :: V.Vector a -> VV.Vector [V.Vector a] -> ([V.Vector a], VV.Vector [V.Vector a])
-    f next q = (outs, q'')
+    bufHops = (chunkSize-1) `div` hopSize
+    bufLen = bufHops * hopSize
+    f :: V.Vector a -> V.Vector a -> ([V.Vector a], V.Vector a)
+    f next q = (outs, q')
         where
         len = V.length next
-        newChunks = VV.generate (len `div` hopSize) $ (return . flip V.drop next . (len -) . (* hopSize) . (+1))
-        q' = newChunks VV.++ fmap (next :) q
-        (q'', r) = VV.splitAt ((chunkSize-1) `div` hopSize) q'
-        outs = VV.toList $ VV.reverse $ fmap (V.take chunkSize . V.concat . reverse) r
+        newBuf = q V.++ next
+        q' = V.drop len newBuf
+        outs = [V.take chunkSize $ V.drop (k * hopSize) newBuf | k <- [0 .. len `div` hopSize - 1]]
 
 sumFramesS :: forall a m. (V.Storable a, Num a, Monad m) => Length -> HopSize -> MSF m [V.Vector a] (V.Vector a)
 sumFramesS chunkSize hopSize = arr (id &&& const chunkSize) >>> sumFramesWithLengthS hopSize
