@@ -17,7 +17,7 @@ benchFramesOfS inputChunkSize chunkSize hopSize size0 = flip whnf size0 $ \size 
         $ count
       >>> arr (V.replicate @Int inputChunkSize)
       >>> framesOfS chunkSize hopSize
-      >>> arr (sum . map V.sum)
+      >>> arr (sum . fmap V.sum)
       >>> accumulateWith (+) 0
     
 benchSumFramesS :: Int -> Int -> Int -> Int -> Benchmarkable

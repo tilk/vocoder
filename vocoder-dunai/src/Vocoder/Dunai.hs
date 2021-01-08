@@ -5,20 +5,19 @@ module Vocoder.Dunai where
 import Data.MonadicStreamFunction
 import Data.Tuple(swap)
 import Data.Maybe(fromMaybe)
-import Data.Foldable
 import qualified Data.Vector.Storable as V
 import Vocoder
 
 volumeFix :: Monad m => VocoderParams -> MSF m STFTFrame STFTFrame
 volumeFix par = arr $ V.map (* volumeCoeff par) *** id
 
-analysis :: Monad m => VocoderParams -> Phase -> MSF m [Frame] [STFTFrame]
+analysis :: (Traversable t, Monad m) => VocoderParams -> Phase -> MSF m (t Frame) (t STFTFrame)
 analysis par = mealy $ \a s -> swap $ analysisStage par s a
 
-synthesis :: Monad m => VocoderParams -> Phase -> MSF m [STFTFrame] [Frame]
+synthesis :: (Traversable t, Monad m) => VocoderParams -> Phase -> MSF m (t STFTFrame) (t Frame)
 synthesis par = mealy $ \a s -> swap $ synthesisStage par s a
 
-process :: Monad m => VocoderParams -> MSF m [STFTFrame] [STFTFrame] -> MSF m [Frame] [Frame]
+process :: (Traversable t, Monad m) => VocoderParams -> MSF m (t STFTFrame) (t STFTFrame) -> MSF m (t Frame) (t Frame)
 process par msf = analysis par (zeroPhase par) >>> msf >>> synthesis par (zeroPhase par)
 
 volumeFixS :: Monad m => VocoderParams -> MSF m Frame Frame
@@ -37,10 +36,10 @@ framesOfS chunkSize hopSize = mealy f $ V.replicate bufLen 0
     bufHops = (chunkSize-1) `div` hopSize
     bufLen = bufHops * hopSize
     f :: V.Vector a -> V.Vector a -> ([V.Vector a], V.Vector a)
-    f next q = (outs, q')
+    f nextv q = (outs, q')
         where
-        len = V.length next
-        newBuf = q V.++ next
+        len = V.length nextv
+        newBuf = q V.++ nextv
         q' = V.drop len newBuf
         outs = [V.take chunkSize $ V.drop (k * hopSize) newBuf | k <- [0 .. len `div` hopSize - 1]]
 

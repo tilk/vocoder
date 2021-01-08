@@ -4,7 +4,6 @@
 module MVarClock where
 
 import Data.Time.Clock
-import Data.Semigroup
 import Control.Concurrent.MVar
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
