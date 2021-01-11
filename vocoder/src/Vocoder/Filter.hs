@@ -19,7 +19,8 @@ module Vocoder.Filter (
     lowpassButterworth,
     highpassButterworth,
     bandpassButterworth,
-    bandstopButterworth
+    bandstopButterworth,
+    pitchShiftInterpolate
     ) where
 
 import Vocoder
@@ -78,4 +79,17 @@ bandpassButterworth n t u = linearAmplitudeFilter $ \x -> butterworthGain n u x 
 -- | Creates an n-th degree Butterworth-style bandstop filter.
 bandstopButterworth :: Double -> Double -> Double -> Filter
 bandstopButterworth n t u = linearAmplitudeFilter $ \x -> butterworthGain (-n) t x + butterworthGain n u x
+
+interpolate :: Double -> V.Vector Double -> V.Vector Double
+interpolate n v = V.generate (V.length v) f 
+    where
+    f x | i + 1 >= V.length v = 0
+        | otherwise = (1-k) * v V.! i + k * v V.! (i+1) where
+            x' = n * fromIntegral x
+            i = floor x'
+            k = x' - fromIntegral i
+
+-- | Creates an interpolative pitch-shifting filter.
+pitchShiftInterpolate :: Double -> Filter
+pitchShiftInterpolate n _ (mag, ph_inc) = (interpolate n mag, V.map (/n) $ interpolate n ph_inc)
 

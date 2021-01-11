@@ -98,6 +98,10 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "bandstopButterworth"
             <> metavar "DEG,FREQ,FREQ"
             <> help "Band-stop Butterworth-style filter"))
+      <|> (pitchShiftInterpolate <$> option auto
+             ( long "pitchShiftInterpolate"
+            <> metavar "COEFF"
+            <> help "Interpolative pitch-shift"))
 
 options :: Parser Options
 options = Options

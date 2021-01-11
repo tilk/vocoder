@@ -21,7 +21,8 @@ module Vocoder.Conduit.Filter(
       lowpassButterworth,
       highpassButterworth,
       bandpassButterworth,
-      bandstopButterworth
+      bandstopButterworth,
+      pitchShiftInterpolate
     ) where
 
 import Vocoder
@@ -78,4 +79,8 @@ bandpassButterworth n t u = realtimeFilter $ F.bandpassButterworth n t u
 -- | Creates an n-th degree Butterworth-style bandstop filter.
 bandstopButterworth :: Monad m => Double -> Double -> Double -> Filter m
 bandstopButterworth n t u = realtimeFilter $ F.bandstopButterworth n t u
+
+-- | Creates an interpolative pitch-shifting filter.
+pitchShiftInterpolate :: Monad m => Double -> Filter m
+pitchShiftInterpolate n = realtimeFilter $ F.pitchShiftInterpolate n
 
