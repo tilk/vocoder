@@ -45,6 +45,15 @@ auto2 = maybeReader $ f . splitOn ","
     f [a,b] = (,) <$> readMaybe a  <*> readMaybe b
     f _ = Nothing
 
+auto3 :: (Read a, Read b, Read c) => ReadM (a, b, c)
+auto3 = maybeReader $ f . splitOn ","
+    where
+    f [a,b,c] = (,,) <$> readMaybe a  <*> readMaybe b <*> readMaybe c
+    f _ = Nothing
+
+uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
+uncurry3 f (a,b,c) = f a b c
+
 filterP :: Monad m => Parser (Filter m)
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
@@ -62,6 +71,22 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "bandstopBrickwall"
             <> metavar "FREQ,FREQ"
             <> help "Band-stop brickwall filter"))
+      <|> (uncurry lowpassButterworth <$> option auto2
+             ( long "lowpassButterworth"
+            <> metavar "DEG,FREQ"
+            <> help "Low-pass Butterworth-style filter"))
+      <|> (uncurry highpassButterworth <$> option auto2
+             ( long "highpassButterworth"
+            <> metavar "DEG,FREQ"
+            <> help "High-pass Butterworth-style filter"))
+      <|> (uncurry3 bandpassButterworth <$> option auto3
+             ( long "bandpassButterworth"
+            <> metavar "DEG,FREQ,FREQ"
+            <> help "Band-pass Butterworth-style filter"))
+      <|> (uncurry3 bandstopButterworth <$> option auto3
+             ( long "bandstopButterworth"
+            <> metavar "DEG,FREQ,FREQ"
+            <> help "Band-stop Butterworth-style filter"))
 
 options :: Parser Options
 options = Options

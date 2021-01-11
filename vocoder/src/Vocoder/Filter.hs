@@ -15,7 +15,11 @@ module Vocoder.Filter (
     lowpassBrickwall,
     highpassBrickwall,
     bandpassBrickwall,
-    bandstopBrickwall
+    bandstopBrickwall,
+    lowpassButterworth,
+    highpassButterworth,
+    bandpassButterworth,
+    bandstopButterworth
     ) where
 
 import Vocoder
@@ -56,4 +60,22 @@ bandpassBrickwall t u = linearAmplitudeFilter $ \x -> if x >= t && x <= u then 1
 bandstopBrickwall :: Double -> Double -> Filter
 bandstopBrickwall t u = linearAmplitudeFilter $ \x -> if x <= t || x >= u then 1.0 else 0.0 
 
+butterworthGain :: Double -> Double -> Double -> Double
+butterworthGain n t x = 1 / sqrt (1 + (x / t)**(2 * n))
+
+-- | Creates an n-th degree Butterworth-style lowpass filter.
+lowpassButterworth :: Double -> Double -> Filter
+lowpassButterworth n t = linearAmplitudeFilter $ butterworthGain n t
+
+-- | Creates an n-th degree Butterworth-style highpass filter.
+highpassButterworth :: Double -> Double -> Filter
+highpassButterworth n t = linearAmplitudeFilter $ butterworthGain (-n) t
+
+-- | Creates an n-th degree Butterworth-style bandpass filter.
+bandpassButterworth :: Double -> Double -> Double -> Filter
+bandpassButterworth n t u = linearAmplitudeFilter $ \x -> butterworthGain n u x * butterworthGain (-n) t x
+
+-- | Creates an n-th degree Butterworth-style bandstop filter.
+bandstopButterworth :: Double -> Double -> Double -> Filter
+bandstopButterworth n t u = linearAmplitudeFilter $ \x -> butterworthGain (-n) t x + butterworthGain n u x
 

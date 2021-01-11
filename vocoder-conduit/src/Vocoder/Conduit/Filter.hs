@@ -17,7 +17,11 @@ module Vocoder.Conduit.Filter(
       lowpassBrickwall,
       highpassBrickwall,
       bandpassBrickwall,
-      bandstopBrickwall
+      bandstopBrickwall,
+      lowpassButterworth,
+      highpassButterworth,
+      bandpassButterworth,
+      bandstopButterworth
     ) where
 
 import Vocoder
@@ -58,4 +62,20 @@ bandpassBrickwall t u = realtimeFilter $ F.bandpassBrickwall t u
 -- | Creates a brickwall bandstop filter.
 bandstopBrickwall :: Monad m => Double -> Double -> Filter m
 bandstopBrickwall t u = realtimeFilter $ F.bandstopBrickwall t u
+
+-- | Creates an n-th degree Butterworth-style lowpass filter.
+lowpassButterworth :: Monad m => Double -> Double -> Filter m
+lowpassButterworth n t = realtimeFilter $ F.lowpassButterworth n t
+
+-- | Creates an n-th degree Butterworth-style highpass filter.
+highpassButterworth :: Monad m => Double -> Double -> Filter m
+highpassButterworth n t = realtimeFilter $ F.highpassButterworth n t
+
+-- | Creates an n-th degree Butterworth-style bandpass filter.
+bandpassButterworth :: Monad m => Double -> Double -> Double -> Filter m
+bandpassButterworth n t u = realtimeFilter $ F.bandpassButterworth n t u
+
+-- | Creates an n-th degree Butterworth-style bandstop filter.
+bandstopButterworth :: Monad m => Double -> Double -> Double -> Filter m
+bandstopButterworth n t u = realtimeFilter $ F.bandstopButterworth n t u
 
