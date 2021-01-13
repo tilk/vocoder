@@ -1,7 +1,8 @@
 {-| 
     Module      : Vocoder
     Description : Phase vocoder
-    Copyright   : (c) Marek Materzok, 2021
+    Copyright   : (c) Celina Pawlińska, 2020
+                      Marek Materzok, 2021
     License     : BSD2
 
 This module implements the phase vocoder algorithms. 
