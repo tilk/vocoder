@@ -91,6 +91,10 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "pitchShiftInterpolate"
             <> metavar "COEFF"
             <> help "Interpolative pitch-shift"))
+      <|> (playSpeed <$> option (toRational <$> (auto :: ReadM Double))
+             ( long "playSpeed"
+            <> metavar "COEFF"
+            <> help "Change speed by coefficient"))
 
 options :: Parser Options
 options = Options

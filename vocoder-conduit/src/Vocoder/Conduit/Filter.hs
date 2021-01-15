@@ -22,7 +22,8 @@ module Vocoder.Conduit.Filter(
       highpassButterworth,
       bandpassButterworth,
       bandstopButterworth,
-      pitchShiftInterpolate
+      pitchShiftInterpolate,
+      playSpeed
     ) where
 
 import Vocoder
@@ -83,4 +84,21 @@ bandstopButterworth n t u = realtimeFilter $ F.bandstopButterworth n t u
 -- | Creates an interpolative pitch-shifting filter.
 pitchShiftInterpolate :: Monad m => Double -> Filter m
 pitchShiftInterpolate n = realtimeFilter $ F.pitchShiftInterpolate n
+
+-- | Changes play speed by replicating or dropping frames.
+playSpeed :: Monad m => Rational -> Filter m
+playSpeed coeff = Filter $ \_ -> f [] 0
+    where
+    f l c
+        | c < 1 = do
+            next <- await
+            case next of
+                Nothing -> mapM_ leftover $ reverse l
+                Just i -> f (i:l) (c + coeff)
+        | otherwise = g l c
+    g l c
+        | c >= 1 = do
+            yield $ l !! 0
+            g l (c - 1)
+        | otherwise = f [] c
 
