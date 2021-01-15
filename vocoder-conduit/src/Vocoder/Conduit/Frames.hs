@@ -11,9 +11,7 @@ module Vocoder.Conduit.Frames (
     ) where
 
 import Control.Arrow
-import Control.Monad
 import Data.Conduit
-import Data.Foldable
 import Data.MonoTraversable
 import Data.Maybe(fromMaybe)
 import qualified Data.Sequences as Seq
@@ -21,21 +19,20 @@ import qualified Data.Sequences as Seq
 -- | Splits a chunked input stream into overlapping frames of constant size
 --   suitable for STFT processing.
 framesOfE :: (Monad m, Seq.IsSequence seq) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
-framesOfE chunkSize hopSize = process 0 []
+framesOfE chunkSize hopSize = process $ Seq.fromList []
     where
-        process !sofar q = do
-            next <- await
-            case next of
-                Nothing -> case q of
-                    [] -> return ()
-                    h : _ -> leftover (mconcat . reverse . snd $ h)
-                Just next' -> do
-                    let len = Seq.lengthIndex next'
-                    let newChunks = map ((len -) &&& (Seq.singleton . flip Seq.drop next')) [sofar, sofar + hopSize .. len-1]
-                    let q' = fmap ((len +) *** (next' :)) q ++ newChunks
-                    let (r, q'') = span ((>= chunkSize) . fst) q'
-                    forM_ (map (Seq.take chunkSize . mconcat . reverse . snd) $ toList r) yield
-                    process ((sofar - len) `mod` hopSize) q''
+        process q = do
+            mnextv <- await
+            case mnextv of
+                Nothing -> return ()
+                Just nextv -> do
+                    let newBuf = q `mappend` nextv
+                    let newBufLen = Seq.lengthIndex newBuf
+                    mapM_ yield [Seq.take chunkSize $ Seq.drop k newBuf
+                                | k <- [0, hopSize .. newBufLen - chunkSize]]
+                    let dropcnt = ((newBufLen - chunkSize) `div` hopSize) * hopSize + hopSize
+                    let q' = Seq.drop dropcnt newBuf
+                    process q'
 
 -- | Builds a chunked output stream from a stream of overlapping frames.
 sumFramesE :: (Monad m, Seq.IsSequence seq, Num (Element seq)) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()

@@ -29,7 +29,7 @@ listSumFramesE chunkSize hopSize input = map (\i -> take chunkSize $ drop i cOut
 
 main :: IO ()
 main = hspec $ do
-    prop "framesOfE" $ \(Positive chunkSize) (Positive hopSize) -> equivToList (listFramesOfE @Int chunkSize hopSize) (framesOfE chunkSize hopSize)
+    prop "framesOfE" $ \(NonNegative chunkSizeP) (Positive hopSize) -> let chunkSize = hopSize + chunkSizeP in equivToList (listFramesOfE @Int chunkSize hopSize) (framesOfE chunkSize hopSize)
     prop "sumFramesE" $ \(Positive chunkSize) (Positive hopSize) -> equivToList (listSumFramesE chunkSize hopSize) (sumFramesE chunkSize hopSize) . map getNonEmpty
 
 
