@@ -12,18 +12,18 @@ import Vocoder.Conduit.Filter
 import Sound.File.Sndfile
 import Data.Conduit.Audio
 import Data.Conduit.Audio.Sndfile
+import Control.Monad
 import Control.Monad.Trans.Resource
 
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
 
 data Options = Options {
-    sourceFile :: String,
-    destFile :: String,
     optFrameSize :: Maybe Length,
     windowSize :: Length,
     hopSizeO :: HopSize,
     windowType :: WindowType,
-    filterOpt :: Filter (ResourceT IO)
+    destFile :: String,
+    sources :: [(String, Filter (ResourceT IO))]
 }
 
 frameSize :: Options -> Length
@@ -39,6 +39,9 @@ windowFun HannWindow = hannWindow
 windowFun BlackmanWindow = blackmanWindow
 windowFun FlatTopWindow = flatTopWindow
 
+vocoderParamsFor :: Options -> VocoderParams
+vocoderParamsFor opts = vocoderParams (frameSize opts) (hopSizeO opts) (windowFor opts)
+
 auto2 :: (Read a, Read b) => ReadM (a, b)
 auto2 = maybeReader $ f . splitOn ","
     where
@@ -53,6 +56,11 @@ auto3 = maybeReader $ f . splitOn ","
 
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a,b,c) = f a b c
+
+sourceP :: Monad m => Parser (String, Filter m)
+sourceP = (,) 
+    <$> argument str (metavar "SRC")
+    <*> filterP
 
 filterP :: Monad m => Parser (Filter m)
 filterP = (lowpassBrickwall <$> option auto
@@ -98,9 +106,7 @@ filterP = (lowpassBrickwall <$> option auto
 
 options :: Parser Options
 options = Options
-    <$> argument str (metavar "SRC")
-    <*> argument str (metavar "DST")
-    <*> optional (option auto 
+    <$> optional (option auto 
         ( long "frameSize"
        <> metavar "SIZE"
        <> help "Size of zero-padded FFT frame, must be >= windowSize"))
@@ -122,7 +128,8 @@ options = Options
        <> value BlackmanWindow
        <> showDefault
        <> help "Type of STFT window")
-    <*> filterP
+    <*> argument str (metavar "DST")
+    <*> some sourceP
 
 myFormat :: Format
 myFormat = Format {headerFormat = HeaderFormatWav, sampleFormat = SampleFormatPcm16, endianFormat = EndianFile}
@@ -137,7 +144,7 @@ main = execParser opts >>= process
 
 process :: Options -> IO ()
 process opts = do
-    src :: AudioSource (ResourceT IO) Double <- sourceSnd $ sourceFile opts
-    let params = vocoderParams (frameSize opts) (hopSizeO opts) (windowFor opts)
-    runResourceT $ sinkSnd (destFile opts) myFormat $ processA params (filterOpt opts) src
+    let params = vocoderParamsFor opts
+    srcs :: [AudioSource (ResourceT IO) Double] <- forM (sources opts) $ \(n, f) -> processA params f <$> sourceSnd n
+    runResourceT $ sinkSnd (destFile opts) myFormat $ foldl1 concatenate srcs
 
