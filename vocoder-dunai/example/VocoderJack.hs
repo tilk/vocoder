@@ -65,6 +65,9 @@ auto3 = maybeReader $ f . splitOn ","
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a,b,c) = f a b c
 
+filtersP :: Parser Filter
+filtersP = foldr composeFilters idFilter <$> many filterP
+
 filterP :: Parser Filter
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
@@ -127,7 +130,7 @@ options = Options
        <> value BlackmanWindow
        <> showDefault
        <> help "Type of STFT window")
-    <*> filterP
+    <*> filtersP
 
 runFilter :: MonadIO m => JACK.Client -> Options -> [STFTFrame] -> m [STFTFrame]
 runFilter client opts i = do

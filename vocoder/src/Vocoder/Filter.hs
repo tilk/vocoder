@@ -10,6 +10,8 @@ the vocoder framework.
 module Vocoder.Filter (
     FreqStep,
     Filter,
+    composeFilters,
+    idFilter,
     amplitudeFilter,
     linearAmplitudeFilter,
     lowpassBrickwall,
@@ -35,6 +37,14 @@ type FreqStep = Double
 --   a function transforming STFT frames which can depend on the
 --   frequency step.
 type Filter = FreqStep -> STFTFrame -> STFTFrame
+
+-- | Sequential composition of filters.
+composeFilters :: Filter -> Filter -> Filter
+composeFilters f1 f2 step = f2 step . f1 step
+
+-- | Identity filter.
+idFilter :: Filter
+idFilter _ = id
 
 -- | Creates a filter which transforms only amplitudes, leaving phase
 --   increments unchanged.
