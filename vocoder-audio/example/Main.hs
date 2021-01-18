@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables, PartialTypeSignatures #-}
 module Main where
 
 import Options.Applicative
@@ -10,7 +9,6 @@ import Vocoder.Window
 import Vocoder.Audio
 import Vocoder.Conduit.Filter
 import Sound.File.Sndfile
-import Data.Conduit.Audio
 import Data.Conduit.Audio.Sndfile
 import Control.Monad
 import Control.Monad.Trans.Resource
@@ -148,6 +146,6 @@ main = execParser opts >>= process
 process :: Options -> IO ()
 process opts = do
     let params = vocoderParamsFor opts
-    srcs :: [AudioSource (ResourceT IO) Double] <- forM (sources opts) $ \(n, f) -> processA params f <$> sourceSnd n
-    runResourceT $ sinkSnd (destFile opts) myFormat $ foldl1 concatenate srcs
+    srcs <- forM (sources opts) $ \(n, f) -> processVocoderAudio params f <$> sourceSnd n
+    runResourceT $ sinkSnd (destFile opts) myFormat $ sourceVocoder $ foldl1 concatenateV srcs
 

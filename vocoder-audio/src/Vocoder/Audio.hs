@@ -7,32 +7,86 @@
 This module allows easy frequency-domain processing on audio streams
 created in @conduit-audio@.
 -}
-module Vocoder.Audio where
+module Vocoder.Audio(
+    VocoderAudioSource(..),
+    concatenateV,
+    sourceVocoder,
+    processAudio,
+    processVocoderAudio
+  ) where
 
 import Data.Conduit
 import Data.Conduit.Audio
 import qualified Data.Conduit.Combinators as DCC
 import Control.Applicative
+import Control.Monad
 import Vocoder
 import Vocoder.Conduit
 import Vocoder.Conduit.Filter
 import Vocoder.Conduit.Frames
+import qualified Data.Vector.Storable as V
+
+data VocoderAudioSource m = VocoderAudioSource {
+    sourceV :: (Frame, (ZipList Phase, ZipList Phase)) 
+            -> ConduitT () Frame m (V.Vector Double, (ZipList Phase, ZipList Phase)),
+    rateV :: Rate,
+    channelsV :: Channels,
+    framesV :: Frames,
+    vocoderParamsV :: VocoderParams
+}
+
+-- | Applies a conduit filter to an audio stream, producing a vocoder stream.
+--   This allows to seamlessly concatenate audio streams for vocoder processing.
+processVocoderAudio 
+    :: Monad m
+    => VocoderParams
+    -> Filter m
+    -> AudioSource m Double 
+    -> VocoderAudioSource m
+processVocoderAudio par c src = VocoderAudioSource newSource (rate src) (channels src) (frames src) par where
+    freqStep = rate src / fromIntegral (vocFrameLength par)
+    newSource (q, ps) = 
+        (source src .| genFramesOfE (vocInputFrameLength par * channels src) (vocHopSize par * channels src) q)
+        `fuseBoth`
+        (DCC.map (ZipList . deinterleave (channels src)) .| (snd <$> processFramesF par ps (runFilter c freqStep)))
+        `fuseUpstream`
+        DCC.map (interleave . getZipList)
+
+-- | Connects the end of the first vocoder source to the beginning of the second. 
+--   The two sources must have the same sample rate, channel count, vocoder hop size
+--   and frame length.
+concatenateV :: Monad m 
+             => VocoderAudioSource m
+             -> VocoderAudioSource m
+             -> VocoderAudioSource m
+concatenateV src1 src2 
+    | rateV src1          /= rateV src2         = error "Vocoder.Audio.concatenateV: mismatched rates"
+    | channelsV src1      /= channelsV src2     = error "Vocoder.Audio.concatenateV: mismatched channels"
+    | vocHopSize par1     /= vocHopSize par2    = error "Vocoder.Audio.concatenateV: mismatched hop size"
+    | vocFrameLength par1 /= vocFrameLength par2 = error "Vocoder.Audio.concatenateV: mismatched frame length"
+    | otherwise = VocoderAudioSource (sourceV src1 >=> sourceV src2) (rateV src1) (channelsV src1) (framesV src1 + framesV src2) (vocoderParamsV src1)
+    where
+    par1 = vocoderParamsV src1
+    par2 = vocoderParamsV src2
+
+-- | Creates an audio source from a vocoder source.
+sourceVocoder :: Monad m 
+              => VocoderAudioSource m
+              -> AudioSource m Double
+sourceVocoder src = AudioSource newSource (rateV src) (channelsV src) (framesV src)
+    where
+    par = vocoderParamsV src
+    phs = ZipList $ replicate (channelsV src) $ zeroPhase par
+    newSource = (sourceV src (V.empty, (phs, phs)) >> return ())
+             .| sumFramesE (chunkSize * channelsV src) (vocHopSize par * channelsV src)
 
 -- | Applies a conduit filter to an audio stream.
-processA :: Monad m
-         => VocoderParams
-         -> Filter m
-         -> AudioSource m Double 
-         -> AudioSource m Double
-processA par c src = AudioSource newSource (rate src) (channels src) (frames src) where
-    phs = ZipList $ replicate (channels src) $ zeroPhase par
-    freqStep = rate src / fromIntegral (vocFrameLength par)
-    newSource = source src 
-             .| framesOfE (vocInputFrameLength par * channels src) (vocHopSize par * channels src) 
-             .| DCC.map (deinterleave $ channels src) 
-             .| DCC.map ZipList
-             .| (processFramesF par (phs, phs) (runFilter c freqStep) >> return ()) 
-             .| DCC.map getZipList
-             .| DCC.map interleave
-             .| sumFramesE (chunkSize * channels src) (vocHopSize par * channels src) 
+processAudio :: Monad m
+             => VocoderParams
+             -> Filter m
+             -> AudioSource m Double 
+             -> AudioSource m Double
+processAudio par c src = sourceVocoder $ processVocoderAudio par c src
+
+
 

@@ -7,6 +7,7 @@
 {-# LANGUAGE BangPatterns, FlexibleContexts #-}
 module Vocoder.Conduit.Frames (
     framesOfE,
+    genFramesOfE,
     sumFramesE
     ) where
 
@@ -19,20 +20,22 @@ import qualified Data.Sequences as Seq
 -- | Splits a chunked input stream into overlapping frames of constant size
 --   suitable for STFT processing.
 framesOfE :: (Monad m, Seq.IsSequence seq) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
-framesOfE chunkSize hopSize = process $ Seq.fromList []
-    where
-        process q = do
-            mnextv <- await
-            case mnextv of
-                Nothing -> return ()
-                Just nextv -> do
-                    let newBuf = q `mappend` nextv
-                    let newBufLen = Seq.lengthIndex newBuf
-                    mapM_ yield [Seq.take chunkSize $ Seq.drop k newBuf
-                                | k <- [0, hopSize .. newBufLen - chunkSize]]
-                    let dropcnt = ((newBufLen - chunkSize) `div` hopSize) * hopSize + hopSize
-                    let q' = Seq.drop dropcnt newBuf
-                    process q'
+framesOfE chunkSize hopSize = genFramesOfE chunkSize hopSize (Seq.fromList []) >> return ()
+
+-- | More general version of framesOfE, suitable for processing multiple inputs.
+genFramesOfE :: (Monad m, Seq.IsSequence seq) => Seq.Index seq -> Seq.Index seq -> seq -> ConduitT seq seq m seq
+genFramesOfE chunkSize hopSize q = do
+    mnextv <- await
+    case mnextv of
+        Nothing -> return q
+        Just nextv -> do
+            let newBuf = q `mappend` nextv
+            let newBufLen = Seq.lengthIndex newBuf
+            mapM_ yield [Seq.take chunkSize $ Seq.drop k newBuf
+                        | k <- [0, hopSize .. newBufLen - chunkSize]]
+            let dropcnt = ((newBufLen - chunkSize) `div` hopSize) * hopSize + hopSize
+            let q' = Seq.drop dropcnt newBuf
+            genFramesOfE chunkSize hopSize q'
 
 -- | Builds a chunked output stream from a stream of overlapping frames.
 sumFramesE :: (Monad m, Seq.IsSequence seq, Num (Element seq)) => Seq.Index seq -> Seq.Index seq -> ConduitT seq seq m ()
