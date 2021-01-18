@@ -60,7 +60,10 @@ uncurry3 f (a,b,c) = f a b c
 sourceP :: Monad m => Parser (String, Filter m)
 sourceP = (,) 
     <$> argument str (metavar "SRC")
-    <*> filterP
+    <*> filtersP
+
+filtersP :: Monad m => Parser (Filter m)
+filtersP = (\l -> if null l then idFilter else foldr1 composeFilters l) <$> many filterP
 
 filterP :: Monad m => Parser (Filter m)
 filterP = (lowpassBrickwall <$> option auto

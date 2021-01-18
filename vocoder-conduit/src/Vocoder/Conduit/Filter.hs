@@ -11,6 +11,8 @@ It includes convenience wrappers for filters defined in the vocoder package.
 module Vocoder.Conduit.Filter(
       Filter,
       runFilter,
+      idFilter,
+      composeFilters,
       realtimeFilter,
       amplitudeFilter,
       linearAmplitudeFilter,
@@ -35,6 +37,14 @@ import qualified Data.Conduit.Combinators as DCC
 --   basic frequency-domain filters by using a conduit instead of a
 --   pure function. This enables time transformation filters.
 newtype Filter m = Filter { runFilter :: forall f. Functor f => F.FreqStep -> ConduitT (f STFTFrame) (f STFTFrame) m () }
+
+-- | Identity filter
+idFilter :: Monad m => Filter m
+idFilter = Filter $ \_ -> awaitForever yield
+
+-- | Sequential filter composition.
+composeFilters :: Monad m => Filter m -> Filter m -> Filter m
+composeFilters (Filter f1) (Filter f2) = Filter $ \step -> f1 step .| f2 step
 
 -- | Use a basic frequency-domain filter as a conduit filter.
 realtimeFilter :: Monad m => F.Filter -> Filter m
