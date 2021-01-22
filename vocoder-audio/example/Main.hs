@@ -12,6 +12,8 @@ import Sound.File.Sndfile
 import Data.Conduit.Audio.Sndfile
 import Control.Monad
 import Control.Monad.Trans.Resource
+import System.Random
+import qualified Data.Vector.Storable as V
 
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
 
@@ -20,9 +22,14 @@ data Options = Options {
     windowSize :: Length,
     hopSizeO :: HopSize,
     windowType :: WindowType,
+    initPhaseRandom :: Bool,
     destFile :: String,
     sources :: [(String, Filter (ResourceT IO))]
 }
+
+initPhase :: Options -> IO Phase
+initPhase opts | initPhaseRandom opts = V.replicateM (vocFreqFrameLength $ vocoderParamsFor opts) $ randomRIO (0, 2*pi)
+               | otherwise = return $ zeroPhase $ vocoderParamsFor opts
 
 frameSize :: Options -> Length
 frameSize opts = maybe (windowSize opts) id $ optFrameSize opts
@@ -136,6 +143,9 @@ options = Options
        <> value BlackmanWindow
        <> showDefault
        <> help "Type of STFT window")
+    <*> switch
+        ( long "randomPhase"
+        <> help "Randomize initial phase")
     <*> argument str (metavar "DST")
     <*> some sourceP
 
@@ -152,7 +162,8 @@ main = execParser opts >>= process
 
 process :: Options -> IO ()
 process opts = do
-    let params = vocoderParamsFor opts
-    srcs <- forM (sources opts) $ \(n, f) -> processVocoderAudio params f <$> sourceSnd n
-    runResourceT $ sinkSnd (destFile opts) myFormat $ sourceVocoder $ foldl1 concatenateV srcs
+    let par = vocoderParamsFor opts
+    iphs <- initPhase opts
+    srcs <- forM (sources opts) $ \(n, f) -> processVocoderAudio par f <$> sourceSnd n
+    runResourceT $ sinkSnd (destFile opts) myFormat $ sourceVocoderWithPhase iphs $ foldl1 concatenateV srcs
 

@@ -11,7 +11,9 @@ module Vocoder.Audio(
     VocoderAudioSource(..),
     concatenateV,
     sourceVocoder,
+    sourceVocoderWithPhase,
     processAudio,
+    processAudioWithPhase,
     processVocoderAudio
   ) where
 
@@ -73,20 +75,39 @@ concatenateV src1 src2
 sourceVocoder :: Monad m 
               => VocoderAudioSource m
               -> AudioSource m Double
-sourceVocoder src = AudioSource newSource (rateV src) (channelsV src) (framesV src)
+sourceVocoder src = sourceVocoderWithPhase (zeroPhase $ vocoderParamsV src) src
+
+-- | Creates an audio source from a vocoder source, with initial phase provided.
+sourceVocoderWithPhase 
+    :: Monad m 
+    => Phase
+    -> VocoderAudioSource m
+    -> AudioSource m Double
+sourceVocoderWithPhase iphs src = AudioSource newSource (rateV src) (channelsV src) (framesV src)
     where
     par = vocoderParamsV src
-    phs = ZipList $ replicate (channelsV src) $ zeroPhase par
+    phs = ZipList $ replicate (channelsV src) iphs
     newSource = (sourceV src (V.empty, (phs, phs)) >> return ())
              .| sumFramesE (chunkSize * channelsV src) (vocHopSize par * channelsV src)
 
 -- | Applies a conduit filter to an audio stream.
-processAudio :: Monad m
-             => VocoderParams
-             -> Filter m
-             -> AudioSource m Double 
-             -> AudioSource m Double
-processAudio par c src = sourceVocoder $ processVocoderAudio par c src
+processAudio 
+    :: Monad m
+    => VocoderParams
+    -> Filter m
+    -> AudioSource m Double 
+    -> AudioSource m Double
+processAudio par = processAudioWithPhase par (zeroPhase par)
+
+-- | Applies a conduit filter to an audio stream, with initial phase provided.
+processAudioWithPhase
+    :: Monad m
+    => VocoderParams
+    -> Phase
+    -> Filter m
+    -> AudioSource m Double 
+    -> AudioSource m Double
+processAudioWithPhase par iphs c src = sourceVocoderWithPhase iphs $ processVocoderAudio par c src
 
 
 

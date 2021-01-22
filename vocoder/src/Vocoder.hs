@@ -23,6 +23,7 @@ module Vocoder (
       vocoderParams,
       vocFrameLength,
       vocInputFrameLength,
+      vocFreqFrameLength,
       vocHopSize,
       vocWindow,
       doFFT,
@@ -93,6 +94,10 @@ data VocoderParams = VocoderParams{
     vocWindow :: Window
     -- TODO thread safety?
 }
+
+-- | FFT frequency frame length.
+vocFreqFrameLength :: VocoderParams -> Length
+vocFreqFrameLength par = planOutputSize $ vocFFTPlan par
 
 -- | FFT frame length. Can be larger than `vocInputFrameLength` for zero-padding.
 vocFrameLength :: VocoderParams -> Length
@@ -195,7 +200,7 @@ cutCenter len vec = V.take len $ V.drop ((V.length vec - len) `div` 2) vec
 -- | Zero phase for a given vocoder configuration.
 -- Can be used to initialize the synthesis stage.
 zeroPhase :: VocoderParams -> Phase
-zeroPhase par = V.replicate (planOutputSize $ vocFFTPlan par) 0
+zeroPhase par = V.replicate (vocFreqFrameLength par) 0
 
 -- | An amplitude change coefficient for the processing pipeline.
 -- Can be used to ensure that the output has the same volume as the input.
