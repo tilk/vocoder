@@ -31,7 +31,7 @@ data Options = Options {
     optWindowSize :: Length,
     optHopSize :: HopSize,
     optWindowType :: WindowType,
-    optFilter :: Filter
+    optFilter :: Filter IO
 }
 
 optFrameSize :: Options -> Length
@@ -65,10 +65,10 @@ auto3 = maybeReader $ f . splitOn ","
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a,b,c) = f a b c
 
-filtersP :: Parser Filter
+filtersP :: Parser (Filter IO)
 filtersP = foldr composeFilters idFilter <$> many filterP
 
-filterP :: Parser Filter
+filterP :: Parser (Filter IO)
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
             <> metavar "FREQ"
@@ -105,6 +105,13 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "pitchShiftInterpolate"
             <> metavar "COEFF"
             <> help "Interpolative pitch-shift"))
+      <|> (envelopeFilter <$> option auto
+             ( long "envelope"
+            <> metavar "KSIZE"
+            <> help "Calculate spectral envelope"))
+      <|> (flag' (randomPhaseFilter)
+             ( long "randomPhase"
+            <> help "Randomize phases (Paulstretch effect)"))
 
 options :: Parser Options
 options = Options
@@ -136,7 +143,7 @@ runFilter :: MonadIO m => JACK.Client -> Options -> [STFTFrame] -> m [STFTFrame]
 runFilter client opts i = do
     rate <- liftIO $ JACK.getSampleRate client
     let freqStep = fromIntegral rate / fromIntegral (optFrameSize opts)
-    return $ map (optFilter opts freqStep) i
+    liftIO $ mapM (optFilter opts freqStep) i
 
 processing :: (MonadIO m, Tag cl ~ AudioV) => JACK.Client -> Options -> MVar AudioV -> ClSF m cl () ()
 processing client opts omvar = 

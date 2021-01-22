@@ -27,20 +27,21 @@ module Vocoder.Conduit.Filter(
       pitchShiftInterpolate,
       convolutionFilter,
       envelopeFilter,
-      neutralPhaseFilter,
+      randomPhaseFilter,
       playSpeed
     ) where
 
 import Vocoder
 import qualified Vocoder.Filter as F
 import Data.Conduit
+import Control.Monad.IO.Class
 import qualified Data.Vector.Storable as V
 import qualified Data.Conduit.Combinators as DCC
 
 -- | Conduit frequency-domain filter type. A conduit filter extends 
 --   basic frequency-domain filters by using a conduit instead of a
 --   pure function. This enables time transformation filters.
-newtype Filter m = Filter { runFilter :: forall f. Functor f => F.FreqStep -> ConduitT (f STFTFrame) (f STFTFrame) m () }
+newtype Filter m = Filter { runFilter :: forall f. Traversable f => F.FreqStep -> ConduitT (f STFTFrame) (f STFTFrame) m () }
 
 -- | Identity filter
 idFilter :: Monad m => Filter m
@@ -51,8 +52,8 @@ composeFilters :: Monad m => Filter m -> Filter m -> Filter m
 composeFilters (Filter f1) (Filter f2) = Filter $ \step -> f1 step .| f2 step
 
 -- | Use a basic frequency-domain filter as a conduit filter.
-realtimeFilter :: Monad m => F.Filter -> Filter m
-realtimeFilter f = Filter (\step -> DCC.map $ fmap $ f step)
+realtimeFilter :: Monad m => F.Filter m -> Filter m
+realtimeFilter f = Filter (\step -> DCC.mapM $ mapM $ f step)
 
 -- | Creates a conduit filter which transforms only amplitudes, leaving
 --   phase increments unchanged.
@@ -109,8 +110,8 @@ envelopeFilter ksize = realtimeFilter $ F.envelopeFilter ksize
 
 -- | Sets the phase increments so that the bins have horizontal consistency.
 --   This erases the phase information, introducing "phasiness".
-neutralPhaseFilter :: Monad m => Filter m
-neutralPhaseFilter = realtimeFilter $ F.neutralPhaseFilter
+randomPhaseFilter :: MonadIO m => Filter m
+randomPhaseFilter = realtimeFilter $ F.randomPhaseFilter
 
 -- | Changes play speed by replicating or dropping frames.
 playSpeed :: Monad m => Rational -> Filter m

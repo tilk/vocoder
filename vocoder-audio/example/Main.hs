@@ -11,6 +11,7 @@ import Vocoder.Conduit.Filter
 import Sound.File.Sndfile
 import Data.Conduit.Audio.Sndfile
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
 import System.Random
 import qualified Data.Vector.Storable as V
@@ -62,15 +63,15 @@ auto3 = maybeReader $ f . splitOn ","
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a,b,c) = f a b c
 
-sourceP :: Monad m => Parser (String, Filter m)
+sourceP :: MonadIO m => Parser (String, Filter m)
 sourceP = (,) 
     <$> argument str (metavar "SRC")
     <*> filtersP
 
-filtersP :: Monad m => Parser (Filter m)
+filtersP :: MonadIO m => Parser (Filter m)
 filtersP = (\l -> if null l then idFilter else foldr1 composeFilters l) <$> many filterP
 
-filterP :: Monad m => Parser (Filter m)
+filterP :: MonadIO m => Parser (Filter m)
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
             <> metavar "FREQ"
@@ -115,9 +116,9 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "playSpeed"
             <> metavar "COEFF"
             <> help "Change speed by coefficient"))
-      <|> (flag' (neutralPhaseFilter)
-             ( long "neutralPhase"
-            <> help "Independent bucket phases"))
+      <|> (flag' (randomPhaseFilter)
+             ( long "randomPhase"
+            <> help "Randomize phases (Paulstretch effect)"))
 
 options :: Parser Options
 options = Options
@@ -144,7 +145,7 @@ options = Options
        <> showDefault
        <> help "Type of STFT window")
     <*> switch
-        ( long "randomPhase"
+        ( long "randomInitPhase"
         <> help "Randomize initial phase")
     <*> argument str (metavar "DST")
     <*> some sourceP
