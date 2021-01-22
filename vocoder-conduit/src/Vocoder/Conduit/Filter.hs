@@ -25,12 +25,16 @@ module Vocoder.Conduit.Filter(
       bandpassButterworth,
       bandstopButterworth,
       pitchShiftInterpolate,
+      convolutionFilter,
+      envelopeFilter,
+      neutralPhaseFilter,
       playSpeed
     ) where
 
 import Vocoder
 import qualified Vocoder.Filter as F
 import Data.Conduit
+import qualified Data.Vector.Storable as V
 import qualified Data.Conduit.Combinators as DCC
 
 -- | Conduit frequency-domain filter type. A conduit filter extends 
@@ -94,6 +98,19 @@ bandstopButterworth n t u = realtimeFilter $ F.bandstopButterworth n t u
 -- | Creates an interpolative pitch-shifting filter.
 pitchShiftInterpolate :: Monad m => Double -> Filter m
 pitchShiftInterpolate n = realtimeFilter $ F.pitchShiftInterpolate n
+
+-- | Creates a filter which convolves the spectrum using a kernel.
+convolutionFilter :: Monad m => V.Vector Double -> Filter m
+convolutionFilter ker = realtimeFilter $ F.convolutionFilter ker
+
+-- | Creates a filter which replaces the amplitudes with their envelope.
+envelopeFilter :: Monad m => Length -> Filter m
+envelopeFilter ksize = realtimeFilter $ F.envelopeFilter ksize
+
+-- | Sets the phase increments so that the bins have horizontal consistency.
+--   This erases the phase information, introducing "phasiness".
+neutralPhaseFilter :: Monad m => Filter m
+neutralPhaseFilter = realtimeFilter $ F.neutralPhaseFilter
 
 -- | Changes play speed by replicating or dropping frames.
 playSpeed :: Monad m => Rational -> Filter m

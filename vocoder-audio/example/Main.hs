@@ -100,10 +100,17 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "pitchShiftInterpolate"
             <> metavar "COEFF"
             <> help "Interpolative pitch-shift"))
+      <|> (envelopeFilter <$> option auto
+             ( long "envelope"
+            <> metavar "KSIZE"
+            <> help "Calculate spectral envelope"))
       <|> (playSpeed <$> option (toRational <$> (auto :: ReadM Double))
              ( long "playSpeed"
             <> metavar "COEFF"
             <> help "Change speed by coefficient"))
+      <|> (flag' (neutralPhaseFilter)
+             ( long "neutralPhase"
+            <> help "Independent bucket phases"))
 
 options :: Parser Options
 options = Options

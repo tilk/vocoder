@@ -22,10 +22,16 @@ module Vocoder.Filter (
     highpassButterworth,
     bandpassButterworth,
     bandstopButterworth,
-    pitchShiftInterpolate
+    pitchShiftInterpolate,
+    convolution,
+    convolutionFilter,
+    envelope,
+    envelopeFilter,
+    neutralPhaseFilter
     ) where
 
 import Vocoder
+import Vocoder.Window(blackmanWindow)
 import qualified Data.Vector.Storable as V
 
 -- | A frequency step is a coefficient relating physical frequency (in Hz)
@@ -102,4 +108,35 @@ interpolate n v = V.generate (V.length v) f
 -- | Creates an interpolative pitch-shifting filter.
 pitchShiftInterpolate :: Double -> Filter
 pitchShiftInterpolate n _ (mag, ph_inc) = (interpolate n mag, V.map (/n) $ interpolate n ph_inc)
+
+-- | Convolves the amplitude spectrum using a kernel.
+convolution :: V.Vector Double -> Moduli -> Moduli
+convolution ker mag = V.generate (V.length mag) $ \k -> V.sum $ flip V.imap ker $ \i v -> v * gmag V.! (i + k)
+    where
+    h = V.length ker `div` 2
+    gmag = V.replicate h 0 V.++ mag V.++ V.replicate h 0
+
+-- | Creates a filter which convolves the spectrum using a kernel.
+convolutionFilter :: V.Vector Double -> Filter
+convolutionFilter ker = amplitudeFilter $ \_ -> convolution ker
+
+-- | Calculates the envelope of an amplitude spectrum using convolution.
+envelope :: Length -> Moduli -> Moduli
+envelope ksize = V.map ((+(-ee)) . exp) . convolution ker . V.map (log . (+ee))
+    where
+    ee = 2**(-24)
+    ker = blackmanWindow ksize
+
+-- | Creates a filter which replaces the amplitudes with their envelope.
+envelopeFilter :: Length -> Filter
+envelopeFilter ksize = amplitudeFilter $ \_ -> envelope ksize
+
+-- | Sets the phase increments so that the bins have horizontal consistency.
+--   This erases the phase information, introducing "phasiness".
+neutralPhaseFilter :: Filter
+neutralPhaseFilter _ (mag, ph_inc) = (mag, ph_inc')
+    where
+    ph_inc' = V.generate (V.length ph_inc) f
+    f i = k * fromIntegral i
+    k = pi / fromIntegral (V.length ph_inc - 1)
 
