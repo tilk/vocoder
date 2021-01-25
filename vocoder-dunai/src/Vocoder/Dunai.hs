@@ -15,7 +15,8 @@ module Vocoder.Dunai (
     processFrames,
     process,
     framesOfS,
-    sumFramesS
+    sumFramesS,
+    sumFramesWithLengthS
     ) where
 
 import Data.MonadicStreamFunction

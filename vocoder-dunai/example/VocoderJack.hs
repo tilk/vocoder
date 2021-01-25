@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, RankNTypes #-}
 module Main where
 
 import qualified Sound.JACK as JACK
@@ -8,6 +8,7 @@ import Data.Array.Storable as A
 import Data.List.Split
 import Text.Read hiding (lift)
 import Control.Monad.Trans.Class(lift)
+import Control.Monad.Trans.Reader(ReaderT(..))
 import Control.Concurrent.MVar
 import Control.Concurrent
 import Control.Monad
@@ -19,10 +20,13 @@ import Vocoder.Window
 import Vocoder.Dunai
 import FRP.Rhine
 import MVarClock
+import ProcessingTree
 
 type AudioV = V.Vector Audio.Sample
 
-type EventIO = EventMVarT AudioV IO
+type EventIO = EventMVarT [AudioV] IO
+
+type MyClock = HoistClock EventIO IO (MVarClock [AudioV])
 
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
 
@@ -31,7 +35,7 @@ data Options = Options {
     optWindowSize :: Length,
     optHopSize :: HopSize,
     optWindowType :: WindowType,
-    optFilter :: Filter IO
+    optProcessingTree :: ProcessingTree (ReaderT (TimeInfo MyClock) IO)
 }
 
 optFrameSize :: Options -> Length
@@ -65,8 +69,8 @@ auto3 = maybeReader $ f . splitOn ","
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a,b,c) = f a b c
 
-filtersP :: Parser (Filter IO)
-filtersP = foldr composeFilters idFilter <$> many filterP
+processingP :: Parser (ProcessingTree (ReaderT (TimeInfo MyClock) IO))
+processingP = (flip PTFilter (PTSource 0) . foldr composeFilters idFilter . map (\f a b -> ReaderT $ const $ f a b)) <$> many filterP
 
 filterP :: Parser (Filter IO)
 filterP = (lowpassBrickwall <$> option auto
@@ -137,23 +141,26 @@ options = Options
        <> value BlackmanWindow
        <> showDefault
        <> help "Type of STFT window")
-    <*> filtersP
+    <*> processingP
 
-runFilter :: MonadIO m => JACK.Client -> Options -> [STFTFrame] -> m [STFTFrame]
-runFilter client opts i = do
-    rate <- liftIO $ JACK.getSampleRate client
-    let freqStep = fromIntegral rate / fromIntegral (optFrameSize opts)
-    liftIO $ mapM (optFilter opts freqStep) i
+runFilter :: JACK.Client -> Options -> ClSF IO MyClock [[STFTFrame]] [STFTFrame]
+runFilter client opts = ret
+    where
+    freqStep = do
+        rate <- liftIO $ JACK.getSampleRate client
+        return $ fromIntegral rate / fromIntegral (optFrameSize opts)
+    (Just ret) = elaboratePT freqStep (optProcessingTree opts)
 
-processing :: (MonadIO m, Tag cl ~ AudioV) => JACK.Client -> Options -> MVar AudioV -> ClSF m cl () ()
+processing :: JACK.Client -> Options -> MVar AudioV -> ClSF IO MyClock () ()
 processing client opts omvar = 
             tagS 
-        >>> arr (V.map realToFrac) 
-        >>> timeless (process params $ arrM $ runFilter client opts)
+        >>> arr (map $ V.map realToFrac) 
+        >>> ((arr head >>> framesOfS (vocInputFrameLength par) (vocHopSize par) >>> analysis par (zeroPhase par) >>> arr return >>> runFilter client opts >>> synthesis par (zeroPhase par)) &&& arr (V.length . head))
+        >>> sumFramesWithLengthS (vocHopSize par) >>> volumeFix par
         >>> arr (V.map realToFrac) 
         >>> arrMCl (liftIO . fmap (const ()) . tryPutMVar omvar)
     where
-    params = paramsFor opts
+    par = paramsFor opts
 
 main :: IO ()
 main = execParser opts >>= run
@@ -173,15 +180,15 @@ run opts = do
         JACK.withPort client "output" $ \oport ->
         JACK.withProcess client (lift . processJack imvar omvar iport oport) $
         JACK.withActivation client $ do
-            _ <- lift $ forkIO $ flow $ processing client opts omvar @@ (mVarClockOn imvar :: HoistClock EventIO IO (MVarClock AudioV))
+            _ <- lift $ forkIO $ flow $ processing client opts omvar @@ mVarClockOn imvar
             lift $ JACK.waitForBreak
     
-processJack :: MVar AudioV -> MVar AudioV -> Audio.Port JACK.Input -> Audio.Port JACK.Output -> JACK.NFrames -> IO ()
+processJack :: MVar [AudioV] -> MVar AudioV -> Audio.Port JACK.Input -> Audio.Port JACK.Output -> JACK.NFrames -> IO ()
 processJack imvar omvar iport oport nframes@(JACK.NFrames frames) = do
     iArr <- Audio.getBufferArray iport nframes
     oArr <- Audio.getBufferArray oport nframes
     iVec <- V.generateM (fromIntegral frames) $ \i -> fmap realToFrac $ A.readArray iArr $ JACK.NFrames $ fromIntegral i
-    _ <- tryPutMVar imvar iVec
+    _ <- tryPutMVar imvar [iVec]
     moVec <- tryTakeMVar omvar
     case moVec of
         Just oVec ->

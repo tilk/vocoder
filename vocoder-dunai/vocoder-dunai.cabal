@@ -31,9 +31,10 @@ library
 
 executable vocoder-jack
   main-is:         VocoderJack.hs
-  other-modules:   MVarClock
+  other-modules:   MVarClock, ProcessingTree
   hs-source-dirs:  example
   build-depends:       base, vocoder, vocoder-dunai, transformers, vector, array, time,
+                       mtl >= 2.2.2 && < 2.3,
                        rhine >= 0.7.0 && < 0.8,
                        jack >= 0.7.1.4 && < 0.8,
                        optparse-applicative >= 0.16.0.0 && < 0.17,
