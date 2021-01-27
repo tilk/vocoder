@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, RankNTypes #-}
+{-# LANGUAGE TypeFamilies, RankNTypes, PatternSynonyms, ViewPatterns #-}
 module Main where
 
 import qualified Sound.JACK as JACK
@@ -30,14 +30,18 @@ type EventIO = EventMVarT [AudioV] IO
 
 type MyClock = HoistClock EventIO IO (MVarClock [AudioV])
 
+type MyMonad = ReaderT (TimeInfo MyClock) IO
+
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
+
+data Cmd = SourceCmd Int | FilterCmd (Filter MyMonad) | NamedCmd String | BindCmd String
 
 data Options = Options {
     optMaybeFrameSize :: Maybe Length,
     optWindowSize :: Length,
     optHopSize :: HopSize,
     optWindowType :: WindowType,
-    optProcessingTree :: ProcessingTree (ReaderT (TimeInfo MyClock) IO)
+    optProcessingTree :: ProcessingTree MyMonad
 }
 
 optFrameSize :: Options -> Length
@@ -74,8 +78,41 @@ auto3 = maybeReader $ f . splitOn ","
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a,b,c) = f a b c
 
-processingP :: Parser (ProcessingTree (ReaderT (TimeInfo MyClock) IO))
-processingP = (flip PTFilter (PTSource 0) . foldr composeFilters idFilter . map (\f a b -> ReaderT $ const $ f a b)) <$> many filterP
+processingP :: Parser (ProcessingTree MyMonad)
+processingP = parseCommands <$> many commandP
+
+ptht :: [ProcessingTree MyMonad] -> [ProcessingTree MyMonad]
+ptht (h:t) = h:t
+ptht [] = [PTSource 0]
+
+pattern (:?) :: ProcessingTree MyMonad
+             -> [ProcessingTree MyMonad] 
+             -> [ProcessingTree MyMonad]
+pattern h :? t <- (ptht -> h:t)
+
+parseCommands :: [Cmd] -> ProcessingTree MyMonad
+parseCommands cmds = p [] cmds 
+    where
+    p (h :? _) [] = h
+    p s        (SourceCmd k : t) = p (PTSource k : s) t
+    p s        (NamedCmd n  : t) = p (PTNamed n : s) t
+    p (h :? s) (FilterCmd f : t) = p (PTFilter f h : s) t
+    p (h :? s) (BindCmd n   : t) = p (PTBind n h : s) t
+
+commandP :: Parser Cmd
+commandP = (FilterCmd . \f a b -> ReaderT $ const $ f a b) <$> filterP
+       <|> (SourceCmd <$> option auto
+             ( long "source"
+            <> metavar "NUM"
+            <> help "Source from JACK input"))
+       <|> (NamedCmd <$> option auto
+             ( long "named"
+            <> metavar "NAME"
+            <> help "Source from named stream"))
+       <|> (BindCmd <$> option auto
+             ( long "bind"
+            <> metavar "NAME"
+            <> help "Bind stream to name"))
 
 filterP :: Parser (Filter IO)
 filterP = (lowpassBrickwall <$> option auto
