@@ -61,6 +61,11 @@ idFilter _ = return
 amplitudeFilter :: Monad m => (FreqStep -> Moduli -> Moduli) -> Filter m
 amplitudeFilter f step (mag, ph_inc) = return (f step mag, ph_inc)
 
+-- | Creates a filter which transforms amplitudes and zeroes the phase 
+--   increments.
+amplitudeFilter0 :: Monad m => (FreqStep -> Moduli -> Moduli) -> Filter m
+amplitudeFilter0 f step (mag, ph_inc) = return (f step mag, V.replicate (V.length ph_inc) 0)
+
 -- | Creates a filter which scales amplitudes depending on frequency.
 linearAmplitudeFilter :: Monad m => (Double -> Double) -> Filter m
 linearAmplitudeFilter f = amplitudeFilter $ \step mag -> V.zipWith (*) mag $ V.generate (V.length mag) $ \k -> f (step * fromIntegral k)
@@ -123,7 +128,7 @@ convolution ker mag = V.generate (V.length mag) $ \k -> V.sum $ flip V.imap ker 
 
 -- | Creates a filter which convolves the spectrum using a kernel.
 convolutionFilter :: Monad m => V.Vector Double -> Filter m
-convolutionFilter ker = amplitudeFilter $ \_ -> convolution ker
+convolutionFilter ker = amplitudeFilter0 $ \_ -> convolution ker
 
 -- | Calculates the envelope of an amplitude spectrum using convolution.
 envelope :: Length -> Moduli -> Moduli
@@ -134,7 +139,7 @@ envelope ksize = V.map ((+(-ee)) . exp) . convolution ker . V.map (log . (+ee))
 
 -- | Creates a filter which replaces the amplitudes with their envelope.
 envelopeFilter :: Monad m => Length -> Filter m
-envelopeFilter ksize = amplitudeFilter $ \_ -> envelope ksize
+envelopeFilter ksize = amplitudeFilter0 $ \_ -> envelope ksize
 
 -- | Sets the phase increments so that the bins have horizontal consistency.
 --   This erases the phase information, introducing "phasiness".

@@ -35,7 +35,9 @@ module Vocoder (
       synthesisStep,
       synthesisStage,
       zeroPhase,
-      volumeCoeff
+      volumeCoeff,
+      frameFromComplex,
+      frameToComplex
     ) where
 
 import Data.List
@@ -156,8 +158,7 @@ analysisStep :: HopSize -> Length -> Phase -> FFTOutput -> (Phase, STFTFrame)
 analysisStep h eN prev_ph vec =
     (ph,(mag,ph_inc))
     where
-    ph = V.map phase vec
-    mag = V.map magnitude vec
+    (mag, ph) = frameFromComplex vec
     ph_inc = V.imap (calcPhaseInc eN h) $ V.zipWith (-) ph prev_ph
 
 -- | Wraps an angle (in radians) to the range [-pi : pi].
@@ -183,7 +184,7 @@ synthesisBlock par ph fr = (id *** doIFFT par) $ synthesisStep (vocHopSize par) 
 -- must be supplied. It returns the phase of the synthesized frame and the result.
 synthesisStep :: HopSize -> Phase -> STFTFrame -> (Phase, FFTOutput)
 synthesisStep hop ph (mag, ph_inc) =
-    (new_ph, V.zipWith mkPolar mag new_ph)
+    (new_ph, frameToComplex (mag, new_ph))
     where
     new_ph = V.zipWith (+) ph $ V.map (* fromIntegral hop) ph_inc
 
@@ -206,4 +207,12 @@ zeroPhase par = V.replicate (vocFreqFrameLength par) 0
 -- Can be used to ensure that the output has the same volume as the input.
 volumeCoeff :: VocoderParams -> Double
 volumeCoeff par = fromIntegral (vocHopSize par) / V.sum (V.map (**2) $ vocWindow par)
+
+-- | Converts frame representation to complex numbers.
+frameToComplex :: STFTFrame -> FFTOutput
+frameToComplex = uncurry $ V.zipWith mkPolar
+
+-- | Converts frame representation to magnitude and phase.
+frameFromComplex :: FFTOutput -> STFTFrame
+frameFromComplex = V.map magnitude &&& V.map phase
 

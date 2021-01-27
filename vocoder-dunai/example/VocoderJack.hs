@@ -34,7 +34,7 @@ type MyMonad = ReaderT (TimeInfo MyClock) IO
 
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
 
-data Cmd = SourceCmd Int | FilterCmd (Filter MyMonad) | NamedCmd String | BindCmd String
+data Cmd = SourceCmd Int | FilterCmd (Filter MyMonad) | NamedCmd String | BindCmd String | BinaryCmd (STFTFrame -> STFTFrame -> STFTFrame)
 
 data Options = Options {
     optMaybeFrameSize :: Maybe Length,
@@ -85,6 +85,8 @@ ptht :: [ProcessingTree MyMonad] -> [ProcessingTree MyMonad]
 ptht (h:t) = h:t
 ptht [] = [PTSource 0]
 
+infixr :?
+
 pattern (:?) :: ProcessingTree MyMonad
              -> [ProcessingTree MyMonad] 
              -> [ProcessingTree MyMonad]
@@ -94,10 +96,16 @@ parseCommands :: [Cmd] -> ProcessingTree MyMonad
 parseCommands cmds = p [] cmds 
     where
     p (h :? _) [] = h
-    p s        (SourceCmd k : t) = p (PTSource k : s) t
-    p s        (NamedCmd n  : t) = p (PTNamed n : s) t
-    p (h :? s) (FilterCmd f : t) = p (PTFilter f h : s) t
-    p (h :? s) (BindCmd n   : t) = p (PTBind n h : s) t
+    p s             (SourceCmd k : t) = p (PTSource k : s) t
+    p s             (NamedCmd n  : t) = p (PTNamed n : s) t
+    p (h :? s)      (FilterCmd f : t) = p (PTFilter f h : s) t
+    p (h :? i :? s) (BinaryCmd f : t) = p (PTBinary f i h : s) t
+    p (h :? s)      (BindCmd n   : t) = p (PTBind n h : s) t
+
+mkBinary :: (Double -> Double -> Double)
+         -> (Double -> Double -> Double)
+         -> STFTFrame -> STFTFrame -> STFTFrame
+mkBinary op1 op2 (mag1, ph_inc1) (mag2, ph_inc2) = (V.zipWith op1 mag1 mag2, V.zipWith op2 ph_inc1 ph_inc2)
 
 commandP :: Parser Cmd
 commandP = (FilterCmd . \f a b -> ReaderT $ const $ f a b) <$> filterP
@@ -113,6 +121,12 @@ commandP = (FilterCmd . \f a b -> ReaderT $ const $ f a b) <$> filterP
              ( long "bind"
             <> metavar "NAME"
             <> help "Bind stream to name"))
+       <|> (flag' (BinaryCmd $ mkBinary (*) (+))
+             ( long "multiply"
+            <> help "Multiply two streams"))
+       <|> (flag' (BinaryCmd $ mkBinary (/) (-))
+             ( long "divide"
+            <> help "Divide two streams"))
 
 filterP :: Parser (Filter IO)
 filterP = (lowpassBrickwall <$> option auto
