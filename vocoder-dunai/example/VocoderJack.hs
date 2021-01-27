@@ -188,7 +188,7 @@ options = Options
     <*> option auto
         ( long "hopSize"
        <> metavar "SIZE"
-       <> value 32
+       <> value 128
        <> showDefault
        <> help "STFT hop size, must be a power of 2")
     <*> option auto
