@@ -32,8 +32,8 @@ library
   default-language:    Haskell2010
   ghc-options:         -Wall
 
-executable example
-  main-is:         Main.hs
+executable vocoder-file
+  main-is:         VocoderFile.hs
   hs-source-dirs:  example
   -- other-modules:
   build-depends:       base >=4.11 && <4.12,
