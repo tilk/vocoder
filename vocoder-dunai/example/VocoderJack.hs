@@ -1,11 +1,11 @@
-{-# LANGUAGE TypeFamilies, RankNTypes, PatternSynonyms, ViewPatterns #-}
+{-# LANGUAGE TypeFamilies, RankNTypes, PatternSynonyms, ViewPatterns, TupleSections #-}
 module Main where
 
 import qualified Sound.JACK as JACK
 import Sound.JACK.Exception
 import qualified Sound.JACK.Audio as Audio
 import qualified Data.Vector.Storable as V
-import Data.Array.Storable as A
+import qualified Data.Vector.Storable.Mutable as VM
 import Data.List.Split
 import Text.Read hiding (lift)
 import Control.Monad.Trans.Class(lift)
@@ -23,12 +23,13 @@ import Vocoder.Dunai
 import FRP.Rhine
 import MVarClock
 import ProcessingTree
+import VocoderJackFFI
 
 type AudioV = V.Vector Audio.Sample
 
-type EventIO = EventMVarT [AudioV] IO
+type EventIO = EventMVarT () IO
 
-type MyClock = HoistClock EventIO IO (MVarClock [AudioV])
+type MyClock = HoistClock EventIO IO (MVarClock ())
 
 type MyMonad = ReaderT (TimeInfo MyClock) IO
 
@@ -233,14 +234,14 @@ runFilter client opts = ret
         return $ fromIntegral rate / fromIntegral (optFrameSize opts)
     (Just ret) = elaboratePT freqStep (optProcessingTree opts)
 
-processing :: JACK.Client -> Options -> MVar AudioV -> ClSF IO MyClock () ()
-processing client opts omvar = 
-            tagS 
+processing :: JACK.Client -> Options -> [VM.IOVector Float] -> VM.IOVector Float -> ClSF IO MyClock () ()
+processing client opts ibufs obuf = 
+            arrMCl (\_ -> liftIO $ mapM V.freeze ibufs)
         >>> arr (map $ V.map realToFrac) 
         >>> ((analysisSrcs srcs >>> runFilter client opts >>> synthesis par (zeroPhase par)) &&& arr (V.length . head))
         >>> sumFramesWithLengthS (vocHopSize par) >>> volumeFix par
         >>> arr (V.map realToFrac) 
-        >>> arrMCl (liftIO . fmap (const ()) . tryPutMVar omvar)
+        >>> arrMCl (liftIO . V.copy obuf)
     where
     par = paramsFor opts
     srcs = optSources opts
@@ -266,29 +267,16 @@ withInputPorts client opts cont = f (optSources opts) [] where
 
 run :: Options -> IO ()
 run opts = do
-    imvar <- newEmptyMVar
-    omvar <- newEmptyMVar 
+    cmvar <- newEmptyMVar
     JACK.handleExceptions $ 
-        JACK.withClientDefault (optClientName opts) $ \client -> 
+        JACK.withClientDefault (optClientName opts) $ \client ->
         withInputPorts client opts $ \iports ->
-        JACK.withPort client "output" $ \oport ->
-        JACK.withProcess client (lift . processJack imvar omvar iports oport) $
-        JACK.withActivation client $ do
-            _ <- lift $ forkIO $ flow $ processing client opts omvar @@ mVarClockOn imvar
-            lift $ JACK.waitForBreak
+        JACK.withPort client "output" $ \oport -> do
+            bufsize <- lift $ JACK.getBufferSize client
+            obuf <- lift $ VM.new bufsize
+            iportbufs <- lift $ forM iports $ \p -> (p, ) <$> VM.new bufsize
+            withVocoderProcess client iportbufs (oport, obuf) (tryPutMVar cmvar () >> return ()) $
+                JACK.withActivation client $ do
+                    _ <- lift $ forkIO $ flow $ processing client opts (map snd iportbufs) obuf @@ mVarClockOn cmvar
+                    lift $ JACK.waitForBreak
     
-processJack :: MVar [AudioV] -> MVar AudioV -> [Audio.Port JACK.Input] -> Audio.Port JACK.Output -> JACK.NFrames -> IO ()
-processJack imvar omvar iports oport nframes@(JACK.NFrames frames) = do
-    iArrs <- forM iports $ \iport -> Audio.getBufferArray iport nframes
-    oArr <- Audio.getBufferArray oport nframes
-    iVecs <- forM iArrs $ \iArr -> V.generateM (fromIntegral frames) $ \i -> fmap realToFrac $ A.readArray iArr $ JACK.NFrames $ fromIntegral i
-    _ <- tryPutMVar imvar iVecs
-    moVec <- tryTakeMVar omvar
-    case moVec of
-        Just oVec ->
-            forM_ (JACK.nframesIndices nframes) $ \ni@(JACK.NFrames i) ->
-                writeArray oArr ni $ realToFrac $ oVec V.! fromIntegral i
-        Nothing ->
-            forM_ (JACK.nframesIndices nframes) $ \ni ->
-                writeArray oArr ni 0
-
