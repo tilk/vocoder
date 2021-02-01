@@ -37,6 +37,7 @@ data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | Flat
 data Cmd = SourceCmd Int | FilterCmd (Filter MyMonad) | NamedCmd String | BindCmd String | BinaryCmd (STFTFrame -> STFTFrame -> STFTFrame)
 
 data Options = Options {
+    optClientName :: String,
     optMaybeFrameSize :: Maybe Length,
     optWindowSize :: Length,
     optHopSize :: HopSize,
@@ -175,7 +176,12 @@ filterP = (lowpassBrickwall <$> option auto
 
 options :: Parser Options
 options = Options
-    <$> optional (option auto
+    <$> option auto
+        ( long "clientName"
+       <> metavar "NAME"
+       <> value "vocoder-jack"
+       <> help "JACK client name")
+    <*> optional (option auto
         ( long "frameSize"
        <> metavar "SIZE"
        <> help "Size of zero-padded FFT frame, must be >= windowSize"))
@@ -243,7 +249,7 @@ run opts = do
     imvar <- newEmptyMVar
     omvar <- newEmptyMVar 
     JACK.handleExceptions $ 
-        JACK.withClientDefault "vocoder-jack" $ \client -> 
+        JACK.withClientDefault (optClientName opts) $ \client -> 
         withInputPorts client opts $ \iports ->
         JACK.withPort client "output" $ \oport ->
         JACK.withProcess client (lift . processJack imvar omvar iports oport) $
