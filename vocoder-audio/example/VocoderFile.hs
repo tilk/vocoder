@@ -129,7 +129,7 @@ options = Options
     <*> option auto
         ( long "windowSize"
        <> metavar "SIZE"
-       <> value 512
+       <> value 1024
        <> showDefault
        <> help "Size of STFT window")
     <*> option auto
