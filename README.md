@@ -52,7 +52,11 @@ Example usage:
 * `vocoder-jack --lowpassButterworth 2,1000`
 
   Low-pass filters the input using a filter with second-order Butterworth-like characteristics and a cut-off frequency of 1000 Hz.
-  
+
+* `vocoder-jack --windowSize 128 --randomPhase`  
+
+  Randomizes STFT phase with small window size, reducing sound clarity and creating a "distorted anonymous voice" effect.
+
 * `vocoder-jack --envelope 32 --randomPhase`  
 
   Take spectral envelope of the input and randomize the STFT phases, producing a whisper-like effect.
