@@ -61,6 +61,10 @@ Example usage:
 
   Take spectral envelope of the input and randomize the STFT phases, producing a whisper-like effect.
 
+* `vocoder-jack --pitchShiftInterpolate 2 --add`
+
+  Adds the spectrum of the input signal to the spectrum lowered by one octave, creating a harmonizer effect.
+
 * `vocoder-jack --envelope 32 --divide --source 1 --envelope 32 --multiply`
 
   Creates a talkbox-like vocoder effect. 

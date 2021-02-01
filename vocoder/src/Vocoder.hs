@@ -37,7 +37,8 @@ module Vocoder (
       zeroPhase,
       volumeCoeff,
       frameFromComplex,
-      frameToComplex
+      frameToComplex,
+      addFrames
     ) where
 
 import Data.List
@@ -215,4 +216,8 @@ frameToComplex = uncurry $ V.zipWith mkPolar
 -- | Converts frame representation to magnitude and phase.
 frameFromComplex :: FFTOutput -> STFTFrame
 frameFromComplex = V.map magnitude &&& V.map phase
+
+-- | Adds STFT frames.
+addFrames :: STFTFrame -> STFTFrame -> STFTFrame
+addFrames f1 f2 = frameFromComplex $ V.zipWith (+) (frameToComplex f1) (frameToComplex f2)
 

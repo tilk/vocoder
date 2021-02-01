@@ -12,6 +12,7 @@ module Vocoder.Filter (
     FreqStep,
     Filter,
     composeFilters,
+    addFilters,
     idFilter,
     amplitudeFilter,
     linearAmplitudeFilter,
@@ -51,6 +52,10 @@ type Filter m = FreqStep -> STFTFrame -> m STFTFrame
 -- | Sequential composition of filters.
 composeFilters :: Monad m => Filter m -> Filter m -> Filter m
 composeFilters f1 f2 step = f1 step >=> f2 step
+
+-- | Addition of filters.
+addFilters :: Monad m => Filter m -> Filter m -> Filter m
+addFilters f1 f2 step fr = addFrames <$> f1 step fr <*> f2 step fr
 
 -- | Identity filter.
 idFilter :: Monad m => Filter m

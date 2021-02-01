@@ -128,6 +128,9 @@ commandP = (FilterCmd . \f a b -> ReaderT $ const $ f a b) <$> filterP
        <|> (flag' (BinaryCmd $ mkBinary (/) (-))
              ( long "divide"
             <> help "Divide two streams"))
+       <|> (flag' (BinaryCmd addFrames)
+             ( long "add"
+            <> help "Add two streams"))
 
 filterP :: Parser (Filter IO)
 filterP = (lowpassBrickwall <$> option auto
