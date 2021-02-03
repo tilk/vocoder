@@ -1,5 +1,4 @@
-# Revision history for vocoder
+## 0.1.0.0
 
-## 0.1.0.0 -- YYYY-mm-dd
+Initial version.
 
-* First version. Released on an unsuspecting world.
