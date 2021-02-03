@@ -70,3 +70,7 @@ Example usage:
   Creates a talkbox-like vocoder effect. 
   The first input's spectrum is divided by its own envelope, and multiplied by the envelope of the second input's spectrum.
 
+* `vocoder-jack --delay 10 --amplify 0.5 --add`
+
+  Create an echo effect by delaying the input by 10 STFT hops, reducing amplitude and adding to the original signal.
+

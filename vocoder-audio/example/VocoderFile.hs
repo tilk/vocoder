@@ -104,6 +104,10 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "bandstopButterworth"
             <> metavar "DEG,FREQ,FREQ"
             <> help "Band-stop Butterworth-style filter"))
+      <|> (amplify <$> option auto
+             ( long "amplify"
+            <> metavar "COEFF"
+            <> help "Change amplitude"))
       <|> (pitchShiftInterpolate <$> option auto
              ( long "pitchShiftInterpolate"
             <> metavar "COEFF"

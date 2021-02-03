@@ -34,7 +34,7 @@ type MyMonad = ReaderT (TimeInfo MyClock) IO
 
 data WindowType = BoxWindow | HammingWindow | HannWindow | BlackmanWindow | FlatTopWindow deriving (Read, Show)
 
-data Cmd = SourceCmd Int | FilterCmd (Filter MyMonad) | NamedCmd String | BindCmd String | BinaryCmd (STFTFrame -> STFTFrame -> STFTFrame)
+data Cmd = SourceCmd Int | MSFCmd (MSF MyMonad [STFTFrame] [STFTFrame]) | FilterCmd (Filter MyMonad) | NamedCmd String | BindCmd String | BinaryCmd (STFTFrame -> STFTFrame -> STFTFrame)
 
 data Options = Options {
     optClientName :: String,
@@ -99,6 +99,7 @@ parseCommands cmds = p [] cmds
     p (h :? _) [] = h
     p s             (SourceCmd k : t) = p (PTSource k : s) t
     p s             (NamedCmd n  : t) = p (PTNamed n : s) t
+    p (h :? s)      (MSFCmd f    : t) = p (PTMSF f h : s) t
     p (h :? s)      (FilterCmd f : t) = p (PTFilter f h : s) t
     p (h :? i :? s) (BinaryCmd f : t) = p (PTBinary f i h : s) t
     p (h :? s)      (BindCmd n   : t) = p (PTBind n h : s) t
@@ -109,7 +110,8 @@ mkBinary :: (Double -> Double -> Double)
 mkBinary op1 op2 (mag1, ph_inc1) (mag2, ph_inc2) = (V.zipWith op1 mag1 mag2, V.zipWith op2 ph_inc1 ph_inc2)
 
 commandP :: Parser Cmd
-commandP = (FilterCmd . \f a b -> ReaderT $ const $ f a b) <$> filterP
+commandP = FilterCmd <$> filterP
+       <|> MSFCmd <$> msfP
        <|> (SourceCmd <$> option auto
              ( long "source"
             <> metavar "NUM"
@@ -132,7 +134,18 @@ commandP = (FilterCmd . \f a b -> ReaderT $ const $ f a b) <$> filterP
              ( long "add"
             <> help "Add two streams"))
 
-filterP :: Parser (Filter IO)
+delayMSF :: Int -> MSF MyMonad [STFTFrame] [STFTFrame]
+delayMSF k = mealy f []
+    where 
+    f i s = (take (length i) s', drop (length s' - k) s') where s' = s ++ i
+
+msfP :: Parser (MSF MyMonad [STFTFrame] [STFTFrame])
+msfP = (delayMSF <$> option auto
+             ( long "delay"
+            <> metavar "HOPS"
+            <> help "Delay the signal by some number of STFT hops"))
+
+filterP :: Parser (Filter MyMonad)
 filterP = (lowpassBrickwall <$> option auto
              ( long "lowpassBrickwall"
             <> metavar "FREQ"
@@ -165,6 +178,10 @@ filterP = (lowpassBrickwall <$> option auto
              ( long "bandstopButterworth"
             <> metavar "DEG,FREQ,FREQ"
             <> help "Band-stop Butterworth-style filter"))
+      <|> (amplify <$> option auto
+             ( long "amplify"
+            <> metavar "COEFF"
+            <> help "Change amplitude"))
       <|> (pitchShiftInterpolate <$> option auto
              ( long "pitchShiftInterpolate"
             <> metavar "COEFF"

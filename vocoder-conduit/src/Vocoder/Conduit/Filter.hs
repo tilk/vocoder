@@ -16,6 +16,7 @@ module Vocoder.Conduit.Filter(
       realtimeFilter,
       amplitudeFilter,
       linearAmplitudeFilter,
+      amplify,
       lowpassBrickwall,
       highpassBrickwall,
       bandpassBrickwall,
@@ -63,6 +64,10 @@ amplitudeFilter = realtimeFilter . F.amplitudeFilter
 -- | Creates a filter which scales amplitudes depending on frequency.
 linearAmplitudeFilter :: Monad m => (Double -> Double) -> Filter m
 linearAmplitudeFilter = realtimeFilter . F.linearAmplitudeFilter
+
+-- | Creates an "amplifier" which scales all frequencies.
+amplify :: Monad m => Double -> Filter m
+amplify = realtimeFilter . F.amplify
 
 -- | Creates a brickwall lowpass filter.
 lowpassBrickwall :: Monad m => Double -> Filter m

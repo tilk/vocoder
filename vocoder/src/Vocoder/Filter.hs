@@ -16,6 +16,7 @@ module Vocoder.Filter (
     idFilter,
     amplitudeFilter,
     linearAmplitudeFilter,
+    amplify,
     lowpassBrickwall,
     highpassBrickwall,
     bandpassBrickwall,
@@ -74,6 +75,10 @@ amplitudeFilter0 f step (mag, ph_inc) = return (f step mag, V.replicate (V.lengt
 -- | Creates a filter which scales amplitudes depending on frequency.
 linearAmplitudeFilter :: Monad m => (Double -> Double) -> Filter m
 linearAmplitudeFilter f = amplitudeFilter $ \step mag -> V.zipWith (*) mag $ V.generate (V.length mag) $ \k -> f (step * fromIntegral k)
+
+-- | Creates an "amplifier" which scales all frequencies.
+amplify :: Monad m => Double -> Filter m
+amplify k = linearAmplitudeFilter (const k)
 
 -- | Creates a brickwall lowpass filter.
 lowpassBrickwall :: Monad m => Double -> Filter m
