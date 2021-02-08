@@ -6,11 +6,14 @@ jobs:
     cabal:
         name: CI
         runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                ghc: ['8.4', '8.6', '8.8', '8.10']
         steps:
           - uses: actions/checkout@v2
           - uses: haskell/actions/setup@v1
             with:
-              ghc-version: '8.4.4'
+              ghc-version: ${{ matrix.ghc }}
           - name: install required packages
             run: sudo apt-get install libfftw3-dev libsndfile1-dev libjack-jackd2-dev
           - name: build
