@@ -23,7 +23,7 @@ library
   exposed-modules: Vocoder, Vocoder.Window, Vocoder.Filter
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.11 && <4.12,
+  build-depends:       base >=4.11 && <4.15,
                        vector >= 0.12.1.0 && <0.13,
                        vector-fftw >= 0.1.3.8 && < 0.2,
                        random >= 1.2.0 && < 1.3
