@@ -16,6 +16,7 @@ import Control.Concurrent
 import Control.Monad
 import Control.Arrow
 import Options.Applicative
+import System.Exit
 import Vocoder
 import Vocoder.Filter
 import Vocoder.Window
@@ -276,7 +277,26 @@ run opts = do
             obuf <- lift $ VM.new bufsize
             iportbufs <- lift $ forM iports $ \p -> (p, ) <$> VM.new bufsize
             withVocoderProcess client iportbufs (oport, obuf) (tryPutMVar cmvar () >> return ()) $
+                JACK.withBufferSize client (\(JACK.NFrames bs) -> if fromIntegral bs == bufsize then return () else lift $ exitFailure) $
+                JACK.withLatency client (latency iports oport (JACK.NFrames $ fromIntegral bufsize)) $
                 JACK.withActivation client $ do
                     _ <- lift $ forkIO $ flow $ processing client opts (map snd iportbufs) obuf @@ mVarClockOn cmvar
                     lift $ JACK.waitForBreak
     
+latency :: [Audio.Port JACK.Input]
+        -> Audio.Port JACK.Output
+        -> JACK.NFrames
+        -> JACK.LatencyCallbackMode
+        -> IO ()
+latency ips op (JACK.NFrames bufsize) m | m == JACK.jackCaptureLatency = do
+    ranges <- forM ips $ \ip -> do
+        JACK.LatencyRange (JACK.NFrames a) (JACK.NFrames b) <- JACK.getLatencyRange ip m
+        return (a, b)
+    let a = maximum $ map fst ranges
+    let b = maximum $ map snd ranges
+    JACK.setLatencyRange op m (JACK.LatencyRange (JACK.NFrames $ a+bufsize) (JACK.NFrames $ b+bufsize))
+latency ips op (JACK.NFrames bufsize) m | otherwise = do
+    JACK.LatencyRange (JACK.NFrames a) (JACK.NFrames b) <- JACK.getLatencyRange op m
+    forM_ ips $ \ip ->
+        JACK.setLatencyRange ip m (JACK.LatencyRange (JACK.NFrames $ a+bufsize) (JACK.NFrames $ b+bufsize))
+
